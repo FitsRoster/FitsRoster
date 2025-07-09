@@ -1,5 +1,7 @@
 
 import FlightAssignment from './FlightAssignment';
+import ContextMenuWrapper from './ContextMenu';
+import { useToast } from '@/hooks/use-toast';
 
 interface CrewMember {
   id: string;
@@ -16,6 +18,8 @@ interface CrewMember {
 }
 
 const CrewRoster = () => {
+  const { toast } = useToast();
+
   // Sample crew data
   const crewMembers: CrewMember[] = [
     {
@@ -105,42 +109,59 @@ const CrewRoster = () => {
   // Generate 42 time slots (7 days * 6 slots per day)
   const totalTimeSlots = 42;
 
+  const handleContextMenuAction = (action: string, memberName: string) => {
+    toast({
+      title: `${action} Added`,
+      description: `${action} has been added for ${memberName}`,
+    });
+  };
+
   return (
     <div className="bg-white">
       {crewMembers.map((member) => (
-        <div key={member.id} className="flex border-b border-gray-100 hover:bg-gray-50">
-          <div className="w-48 p-4 border-r border-gray-200">
-            <div className="font-medium text-gray-900">{member.name}</div>
-            <div className="text-sm text-gray-500">{member.role}</div>
-          </div>
-          <div className="flex-1 relative">
-            <div className="flex min-w-max">
-              {/* Create grid of time slots */}
-              {Array.from({ length: totalTimeSlots }, (_, index) => (
-                <div key={index} className="w-32 h-16 border-r border-gray-100 relative">
-                  {/* Render assignments that start at this time slot */}
-                  {member.assignments
-                    .filter(assignment => assignment.timeSlotIndex === index)
-                    .map((assignment, assignmentIndex) => (
-                      <div
-                        key={assignmentIndex}
-                        className="absolute top-2 left-1"
-                        style={{ zIndex: 1 }}
-                      >
-                        <FlightAssignment
-                          flightNumber={assignment.flightNumber}
-                          route={assignment.route}
-                          startTime={assignment.startTime}
-                          duration={assignment.duration}
-                          type={assignment.type}
-                        />
-                      </div>
-                    ))}
-                </div>
-              ))}
+        <ContextMenuWrapper
+          key={member.id}
+          onAddOff={() => handleContextMenuAction('OFF', member.name)}
+          onAddRQF={() => handleContextMenuAction('RQF', member.name)}
+          onAddEditNote={() => handleContextMenuAction('Note', member.name)}
+          onAddOfficeDuty={() => handleContextMenuAction('Office Duty', member.name)}
+          onAddStandby={() => handleContextMenuAction('Standby', member.name)}
+          onLeaves={() => handleContextMenuAction('Leave', member.name)}
+        >
+          <div className="flex border-b border-gray-100 hover:bg-gray-50">
+            <div className="w-48 p-4 border-r border-gray-200">
+              <div className="font-medium text-gray-900">{member.name}</div>
+              <div className="text-sm text-gray-500">{member.role}</div>
+            </div>
+            <div className="flex-1 relative">
+              <div className="flex min-w-max">
+                {/* Create grid of time slots */}
+                {Array.from({ length: totalTimeSlots }, (_, index) => (
+                  <div key={index} className="w-32 h-16 border-r border-gray-100 relative">
+                    {/* Render assignments that start at this time slot */}
+                    {member.assignments
+                      .filter(assignment => assignment.timeSlotIndex === index)
+                      .map((assignment, assignmentIndex) => (
+                        <div
+                          key={assignmentIndex}
+                          className="absolute top-2 left-1"
+                          style={{ zIndex: 1 }}
+                        >
+                          <FlightAssignment
+                            flightNumber={assignment.flightNumber}
+                            route={assignment.route}
+                            startTime={assignment.startTime}
+                            duration={assignment.duration}
+                            type={assignment.type}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </ContextMenuWrapper>
       ))}
     </div>
   );
