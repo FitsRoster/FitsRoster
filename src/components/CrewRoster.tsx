@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import FlightAssignment from './FlightAssignment';
@@ -15,6 +14,7 @@ const CrewRoster = () => {
   const [crewEvents, setCrewEvents] = useState<CrewEvent[]>([]);
   const [selectedCrewMember, setSelectedCrewMember] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Generate 42 time slots (7 days * 6 slots per day)
   const totalTimeSlots = 42;
@@ -43,15 +43,21 @@ const CrewRoster = () => {
 
   const loadData = async () => {
     try {
+      console.log('Starting to load data...');
       setLoading(true);
+      setError(null);
+
       const [crews, flights, events] = await Promise.all([
         crewService.getCrewMembers(),
         crewService.getFlightAssignments(),
         crewService.getCrewEvents(),
       ]);
       
+      console.log('Data loaded successfully:', { crews: crews.length, flights: flights.length, events: events.length });
+      
       // If no crew members exist, add sample data
       if (crews.length === 0) {
+        console.log('No crew members found, initializing sample data...');
         await initializeSampleData();
         return loadData(); // Reload after initialization
       }
@@ -61,6 +67,7 @@ const CrewRoster = () => {
       setCrewEvents(events);
     } catch (error) {
       console.error('Error loading data:', error);
+      setError('Failed to load crew data. Please check your connection and try again.');
       toast({
         title: 'Error',
         description: 'Failed to load crew data',
@@ -72,16 +79,23 @@ const CrewRoster = () => {
   };
 
   const initializeSampleData = async () => {
-    const sampleCrews = [
-      { name: 'Sarah Johnson', role: 'Captain' as const, totalFlightHours: 5000, totalDutyHours: 8000, restHours: 12, certifications: ['A320', 'A330'] },
-      { name: 'Michael Chen', role: 'First Officer' as const, totalFlightHours: 3000, totalDutyHours: 5000, restHours: 10, certifications: ['A320'] },
-      { name: 'Emily Rodriguez', role: 'Flight Attendant' as const, totalFlightHours: 2000, totalDutyHours: 4000, restHours: 8, certifications: ['Safety', 'Service'] },
-      { name: 'David Wilson', role: 'Flight Attendant' as const, totalFlightHours: 1500, totalDutyHours: 3000, restHours: 8, certifications: ['Safety'] },
-      { name: 'Lisa Thompson', role: 'Captain' as const, totalFlightHours: 6000, totalDutyHours: 10000, restHours: 12, certifications: ['A320', 'A330', 'B777'] }
-    ];
+    try {
+      console.log('Initializing sample data...');
+      const sampleCrews = [
+        { name: 'Sarah Johnson', role: 'Captain' as const, totalFlightHours: 5000, totalDutyHours: 8000, restHours: 12, certifications: ['A320', 'A330'] },
+        { name: 'Michael Chen', role: 'First Officer' as const, totalFlightHours: 3000, totalDutyHours: 5000, restHours: 10, certifications: ['A320'] },
+        { name: 'Emily Rodriguez', role: 'Flight Attendant' as const, totalFlightHours: 2000, totalDutyHours: 4000, restHours: 8, certifications: ['Safety', 'Service'] },
+        { name: 'David Wilson', role: 'Flight Attendant' as const, totalFlightHours: 1500, totalDutyHours: 3000, restHours: 8, certifications: ['Safety'] },
+        { name: 'Lisa Thompson', role: 'Captain' as const, totalFlightHours: 6000, totalDutyHours: 10000, restHours: 12, certifications: ['A320', 'A330', 'B777'] }
+      ];
 
-    for (const crew of sampleCrews) {
-      await crewService.addCrewMember(crew);
+      for (const crew of sampleCrews) {
+        await crewService.addCrewMember(crew);
+      }
+      console.log('Sample data initialized successfully');
+    } catch (error) {
+      console.error('Error initializing sample data:', error);
+      throw error;
     }
   };
 
@@ -224,7 +238,31 @@ const CrewRoster = () => {
   if (loading) {
     return (
       <div className="bg-white p-8 text-center">
-        <div className="text-lg">Loading crew data...</div>
+        <div className="text-lg mb-4">Loading crew data...</div>
+        <div className="text-sm text-gray-500">
+          Connecting to database and fetching crew information...
+        </div>
+        <button 
+          onClick={loadData}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry Loading
+        </button>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white p-8 text-center">
+        <div className="text-lg text-red-600 mb-4">Error Loading Data</div>
+        <div className="text-sm text-gray-500 mb-4">{error}</div>
+        <button 
+          onClick={loadData}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -232,7 +270,7 @@ const CrewRoster = () => {
   return (
     <div className="bg-white">
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h3 className="text-lg font-medium">Crew Assignments</h3>
+        <h3 className="text-lg font-medium">Crew Assignments ({crewMembers.length} members)</h3>
         {selectedCrewMember && (
           <AddFlightDialog
             onAddFlight={(flightData) => handleAddFlight(selectedCrewMember, flightData)}
