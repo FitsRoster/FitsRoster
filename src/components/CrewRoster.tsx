@@ -1,132 +1,90 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import FlightAssignment from './FlightAssignment';
 import ContextMenuWrapper from './ContextMenu';
 import AddFlightDialog from './AddFlightDialog';
+import AddCrewEventDialog from './AddCrewEventDialog';
 import { useToast } from '@/hooks/use-toast';
-
-interface CrewMember {
-  id: string;
-  name: string;
-  role: string;
-  assignments: Array<{
-    id: string;
-    flightNumber: string;
-    route: string;
-    startTime: string;
-    duration: number;
-    type: 'domestic' | 'international' | 'charter';
-    timeSlotIndex: number; // which time slot this assignment starts at
-  }>;
-}
+import { crewService, CrewMember, FlightAssignment as FlightAssignmentType, CrewEvent } from '../services/crewService';
 
 const CrewRoster = () => {
   const { toast } = useToast();
-
-  // Sample crew data with state management
-  const [crewMembers, setCrewMembers] = useState<CrewMember[]>([
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      role: 'Captain',
-      assignments: [
-        {
-          id: '1-1',
-          flightNumber: 'AA1234',
-          route: 'LAX-JFK',
-          startTime: '06:00',
-          duration: 6,
-          type: 'domestic',
-          timeSlotIndex: 1
-        },
-        {
-          id: '1-2',
-          flightNumber: 'AA5678',
-          route: 'JFK-LAX',
-          startTime: '18:00',
-          duration: 6,
-          type: 'domestic',
-          timeSlotIndex: 4
-        }
-      ]
-    },
-    {
-      id: '2',
-      name: 'Michael Chen',
-      role: 'First Officer',
-      assignments: [
-        {
-          id: '2-1',
-          flightNumber: 'AA9012',
-          route: 'LAX-LHR',
-          startTime: '22:00',
-          duration: 11,
-          type: 'international',
-          timeSlotIndex: 5
-        }
-      ]
-    },
-    {
-      id: '3',
-      name: 'Emily Rodriguez',
-      role: 'Flight Attendant',
-      assignments: [
-        {
-          id: '3-1',
-          flightNumber: 'AA3456',
-          route: 'LAX-DEN',
-          startTime: '10:00',
-          duration: 3,
-          type: 'domestic',
-          timeSlotIndex: 2
-        },
-        {
-          id: '3-2',
-          flightNumber: 'CH789',
-          route: 'DEN-LAS',
-          startTime: '16:00',
-          duration: 2,
-          type: 'charter',
-          timeSlotIndex: 4
-        }
-      ]
-    },
-    {
-      id: '4',
-      name: 'David Wilson',
-      role: 'Flight Attendant',
-      assignments: [
-        {
-          id: '4-1',
-          flightNumber: 'AA7890',
-          route: 'LAX-ORD',
-          startTime: '14:00',
-          duration: 4,
-          type: 'domestic',
-          timeSlotIndex: 3
-        }
-      ]
-    },
-    {
-      id: '5',
-      name: 'Lisa Thompson',
-      role: 'Captain',
-      assignments: []
-    }
-  ]);
-
+  const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
+  const [flightAssignments, setFlightAssignments] = useState<FlightAssignmentType[]>([]);
+  const [crewEvents, setCrewEvents] = useState<CrewEvent[]>([]);
   const [selectedCrewMember, setSelectedCrewMember] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Generate 42 time slots (7 days * 6 slots per day)
   const totalTimeSlots = 42;
 
-  const handleContextMenuAction = (action: string, memberName: string) => {
-    toast({
-      title: `${action} Added`,
-      description: `${action} has been added for ${memberName}`,
-    });
+  // Helper function to calculate time slot index from date
+  const getTimeSlotIndex = (date: Date): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const daysDiff = Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const hours = date.getHours();
+    const slotInDay = Math.floor(hours / 4); // 0-5 (6 slots per day)
+    
+    return daysDiff * 6 + slotInDay;
   };
 
-  const handleAddFlight = (crewMemberId: string, flightData: {
+  // Helper function to calculate duration in slots
+  const getDurationInSlots = (startTime: Date, endTime: Date): number => {
+    const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+    return Math.ceil(durationHours / 4); // Each slot is 4 hours
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [crews, flights, events] = await Promise.all([
+        crewService.getCrewMembers(),
+        crewService.getFlightAssignments(),
+        crewService.getCrewEvents(),
+      ]);
+      
+      // If no crew members exist, add sample data
+      if (crews.length === 0) {
+        await initializeSampleData();
+        return loadData(); // Reload after initialization
+      }
+      
+      setCrewMembers(crews);
+      setFlightAssignments(flights);
+      setCrewEvents(events);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load crew data',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeSampleData = async () => {
+    const sampleCrews = [
+      { name: 'Sarah Johnson', role: 'Captain' as const, totalFlightHours: 5000, totalDutyHours: 8000, restHours: 12, certifications: ['A320', 'A330'] },
+      { name: 'Michael Chen', role: 'First Officer' as const, totalFlightHours: 3000, totalDutyHours: 5000, restHours: 10, certifications: ['A320'] },
+      { name: 'Emily Rodriguez', role: 'Flight Attendant' as const, totalFlightHours: 2000, totalDutyHours: 4000, restHours: 8, certifications: ['Safety', 'Service'] },
+      { name: 'David Wilson', role: 'Flight Attendant' as const, totalFlightHours: 1500, totalDutyHours: 3000, restHours: 8, certifications: ['Safety'] },
+      { name: 'Lisa Thompson', role: 'Captain' as const, totalFlightHours: 6000, totalDutyHours: 10000, restHours: 12, certifications: ['A320', 'A330', 'B777'] }
+    ];
+
+    for (const crew of sampleCrews) {
+      await crewService.addCrewMember(crew);
+    }
+  };
+
+  const handleAddFlight = async (crewMemberId: string, flightData: {
     flightNumber: string;
     route: string;
     startTime: string;
@@ -134,39 +92,141 @@ const CrewRoster = () => {
     type: 'domestic' | 'international' | 'charter';
     timeSlotIndex: number;
   }) => {
-    setCrewMembers(prev => prev.map(member => 
-      member.id === crewMemberId 
-        ? {
-            ...member,
-            assignments: [...member.assignments, {
-              id: `${crewMemberId}-${Date.now()}`,
-              ...flightData
-            }]
-          }
-        : member
-    ));
+    try {
+      const startTime = new Date();
+      const [hours, minutes] = flightData.startTime.split(':').map(Number);
+      
+      // Calculate the actual date based on time slot index
+      const dayIndex = Math.floor(flightData.timeSlotIndex / 6);
+      const slotInDay = flightData.timeSlotIndex % 6;
+      const hourInDay = slotInDay * 4;
+      
+      startTime.setDate(startTime.getDate() + dayIndex);
+      startTime.setHours(hourInDay + hours, minutes, 0, 0);
+      
+      const endTime = new Date(startTime);
+      endTime.setHours(endTime.getHours() + flightData.duration);
+
+      const newFlight: Omit<FlightAssignmentType, 'id' | 'createdAt'> = {
+        crewMemberId,
+        flightNumber: flightData.flightNumber,
+        route: flightData.route,
+        startTime,
+        endTime,
+        duration: flightData.duration,
+        type: flightData.type,
+        status: 'scheduled',
+      };
+
+      await crewService.addFlightAssignment(newFlight);
+      await loadData(); // Reload to get updated data
+      
+      toast({
+        title: 'Flight Added',
+        description: `${flightData.flightNumber} has been added to the roster`,
+      });
+    } catch (error) {
+      console.error('Error adding flight:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add flight',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRemoveFlight = async (flightId: string) => {
+    try {
+      await crewService.deleteFlightAssignment(flightId);
+      await loadData(); // Reload to get updated data
+      
+      toast({
+        title: 'Flight Removed',
+        description: 'Flight has been removed from the roster',
+      });
+    } catch (error) {
+      console.error('Error removing flight:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove flight',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddCrewEvent = async (crewMemberId: string, eventData: {
+    type: 'OFF' | 'RQF' | 'Office Duty' | 'Standby' | 'Leave';
+    startTime: Date;
+    endTime: Date;
+    notes?: string;
+  }) => {
+    try {
+      const newEvent: Omit<CrewEvent, 'id' | 'createdAt'> = {
+        crewMemberId,
+        type: eventData.type,
+        startTime: eventData.startTime,
+        endTime: eventData.endTime,
+        notes: eventData.notes,
+      };
+
+      await crewService.addCrewEvent(newEvent);
+      await loadData(); // Reload to get updated data
+      
+      toast({
+        title: `${eventData.type} Added`,
+        description: `${eventData.type} has been added to the roster`,
+      });
+    } catch (error) {
+      console.error('Error adding crew event:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add crew event',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getCrewAssignments = (crewMemberId: string) => {
+    const flights = flightAssignments.filter(f => f.crewMemberId === crewMemberId);
+    const events = crewEvents.filter(e => e.crewMemberId === crewMemberId);
     
-    toast({
-      title: 'Flight Added',
-      description: `${flightData.flightNumber} has been added to the roster`,
+    return [...flights, ...events].map(item => {
+      if ('flightNumber' in item) {
+        // It's a flight
+        return {
+          id: item.id,
+          type: 'flight' as const,
+          flightNumber: item.flightNumber,
+          route: item.route,
+          startTime: item.startTime,
+          duration: item.duration,
+          flightType: item.type,
+          timeSlotIndex: getTimeSlotIndex(item.startTime),
+          durationInSlots: getDurationInSlots(item.startTime, item.endTime),
+        };
+      } else {
+        // It's a crew event
+        return {
+          id: item.id,
+          type: 'event' as const,
+          eventType: item.type,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          notes: item.notes,
+          timeSlotIndex: getTimeSlotIndex(item.startTime),
+          durationInSlots: getDurationInSlots(item.startTime, item.endTime),
+        };
+      }
     });
   };
 
-  const handleRemoveFlight = (crewMemberId: string, assignmentId: string) => {
-    setCrewMembers(prev => prev.map(member => 
-      member.id === crewMemberId 
-        ? {
-            ...member,
-            assignments: member.assignments.filter(assignment => assignment.id !== assignmentId)
-          }
-        : member
-    ));
-    
-    toast({
-      title: 'Flight Removed',
-      description: 'Flight has been removed from the roster',
-    });
-  };
+  if (loading) {
+    return (
+      <div className="bg-white p-8 text-center">
+        <div className="text-lg">Loading crew data...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white">
@@ -182,12 +242,12 @@ const CrewRoster = () => {
       {crewMembers.map((member) => (
         <ContextMenuWrapper
           key={member.id}
-          onAddOff={() => handleContextMenuAction('OFF', member.name)}
-          onAddRQF={() => handleContextMenuAction('RQF', member.name)}
-          onAddEditNote={() => handleContextMenuAction('Note', member.name)}
-          onAddOfficeDuty={() => handleContextMenuAction('Office Duty', member.name)}
-          onAddStandby={() => handleContextMenuAction('Standby', member.name)}
-          onLeaves={() => handleContextMenuAction('Leave', member.name)}
+          onAddOff={() => {}}
+          onAddRQF={() => {}}
+          onAddEditNote={() => {}}
+          onAddOfficeDuty={() => {}}
+          onAddStandby={() => {}}
+          onLeaves={() => {}}
         >
           <div 
             className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
@@ -196,36 +256,76 @@ const CrewRoster = () => {
             <div className="w-64 p-4 border-r border-gray-200">
               <div className="font-medium text-gray-900">{member.name}</div>
               <div className="text-sm text-gray-500">{member.role}</div>
+              <div className="text-xs text-gray-400 mt-1">
+                Flight Hours: {member.totalFlightHours} | Duty Hours: {member.totalDutyHours}
+              </div>
               {selectedCrewMember === member.id && (
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap gap-1">
                   <AddFlightDialog
                     onAddFlight={(flightData) => handleAddFlight(member.id, flightData)}
                   />
+                  <AddCrewEventDialog
+                    crewMemberId={member.id}
+                    crewMemberName={member.name}
+                    eventType="OFF"
+                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                  >
+                    <Button variant="outline" size="sm">OFF</Button>
+                  </AddCrewEventDialog>
+                  <AddCrewEventDialog
+                    crewMemberId={member.id}
+                    crewMemberName={member.name}
+                    eventType="RQF"
+                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                  >
+                    <Button variant="outline" size="sm">RQF</Button>
+                  </AddCrewEventDialog>
+                  <AddCrewEventDialog
+                    crewMemberId={member.id}
+                    crewMemberName={member.name}
+                    eventType="Office Duty"
+                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                  >
+                    <Button variant="outline" size="sm">Office</Button>
+                  </AddCrewEventDialog>
                 </div>
               )}
             </div>
             <div className="flex-1 relative">
               <div className="flex min-w-max">
-                {/* Create grid of time slots */}
                 {Array.from({ length: totalTimeSlots }, (_, index) => (
                   <div key={index} className="w-32 h-16 border-r border-gray-100 relative">
-                    {/* Render assignments that start at this time slot */}
-                    {member.assignments
+                    {getCrewAssignments(member.id)
                       .filter(assignment => assignment.timeSlotIndex === index)
                       .map((assignment) => (
                         <div
                           key={assignment.id}
                           className="absolute top-2 left-1"
-                          style={{ zIndex: 1 }}
+                          style={{ 
+                            zIndex: 1,
+                            width: `${assignment.durationInSlots * 128 - 8}px` // Span multiple slots
+                          }}
                         >
-                          <FlightAssignment
-                            flightNumber={assignment.flightNumber}
-                            route={assignment.route}
-                            startTime={assignment.startTime}
-                            duration={assignment.duration}
-                            type={assignment.type}
-                            onRemove={() => handleRemoveFlight(member.id, assignment.id)}
-                          />
+                          {assignment.type === 'flight' ? (
+                            <FlightAssignment
+                              flightNumber={assignment.flightNumber!}
+                              route={assignment.route!}
+                              startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              duration={assignment.duration!}
+                              type={assignment.flightType!}
+                              onRemove={() => handleRemoveFlight(assignment.id)}
+                            />
+                          ) : (
+                            <div 
+                              className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+                              title={`${assignment.eventType} - ${assignment.notes || ''}`}
+                            >
+                              <div className="font-semibold">{assignment.eventType}</div>
+                              <div className="text-xs opacity-75">
+                                {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                   </div>

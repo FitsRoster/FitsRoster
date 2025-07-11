@@ -9,13 +9,13 @@ const RosterHeader = () => {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       
-      // Create time slots for each day (every 4 hours)
+      // Create time slots for each day (every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
       for (let hour = 0; hour < 24; hour += 4) {
         const timeSlot = new Date(date);
         timeSlot.setHours(hour, 0, 0, 0);
         
         timeline.push({
-          id: `${date.toDateString()}-${hour}`,
+          id: `${i}-${hour}`,
           time: timeSlot.toLocaleTimeString('en-US', { 
             hour: '2-digit', 
             minute: '2-digit',
@@ -24,7 +24,10 @@ const RosterHeader = () => {
           date: date.toLocaleDateString('en-US', { 
             month: 'short', 
             day: 'numeric' 
-          })
+          }),
+          dayIndex: i,
+          hourIndex: hour,
+          slotIndex: i * 6 + (hour / 4) // Calculate global slot index
         });
       }
     }
