@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import FlightAssignment from './FlightAssignment';
 import ContextMenuWrapper from './ContextMenu';
@@ -194,7 +193,7 @@ const CrewRoster = () => {
             className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
             onClick={() => setSelectedCrewMember(member.id)}
           >
-            <div className="w-48 p-4 border-r border-gray-200">
+            <div className="w-64 p-4 border-r border-gray-200">
               <div className="font-medium text-gray-900">{member.name}</div>
               <div className="text-sm text-gray-500">{member.role}</div>
               {selectedCrewMember === member.id && (

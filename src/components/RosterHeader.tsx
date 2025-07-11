@@ -37,7 +37,7 @@ const RosterHeader = () => {
   return (
     <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
       <div className="flex">
-        <div className="w-48 bg-gray-50 border-r border-gray-200 p-4">
+        <div className="w-64 bg-gray-50 border-r border-gray-200 p-4">
           <h2 className="text-lg font-semibold text-gray-900">Flight Crew</h2>
         </div>
         <div className="flex-1 overflow-x-auto">
