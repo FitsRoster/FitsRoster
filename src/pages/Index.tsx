@@ -2,7 +2,7 @@
 import RosterHeader from '../components/RosterHeader';
 import CrewRoster from '../components/CrewRoster';
 import LogoutButton from '../components/LogoutButton';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 const Index = () => {
   return (
@@ -22,6 +22,7 @@ const Index = () => {
               <RosterHeader />
               <CrewRoster />
             </div>
+            <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </div>
       </div>
