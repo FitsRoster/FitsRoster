@@ -20,7 +20,7 @@ const CrewRoster = () => {
   // Generate the same timeline as the header
   const timeline = generateTimeSlots();
   const totalTimeSlots = timeline.length;
-  const SLOT_WIDTH = 40; // Updated to match RosterHeader
+  const SLOT_WIDTH = 64; // Updated to match RosterHeader (w-16 = 64px)
 
   useEffect(() => {
     loadData();
@@ -362,7 +362,7 @@ const CrewRoster = () => {
             </div>
             <div className="flex relative">
               {timeline.map((slot, index) => (
-                <div key={slot.id} className="w-10 h-28 border-r border-gray-100 relative flex-shrink-0">
+                <div key={slot.id} className="w-16 h-28 border-r border-gray-100 relative flex-shrink-0">
                 </div>
               ))}
               {/* Render assignments with precise positioning */}
@@ -376,7 +376,7 @@ const CrewRoster = () => {
                     className="absolute top-2"
                     style={{ 
                       left: `${leftOffset}px`,
-                      width: `${Math.max(width, 40)}px`, // Minimum width for visibility
+                      width: `${Math.max(width, 64)}px`, // Minimum width matches slot width
                       zIndex: 1
                     }}
                   >
