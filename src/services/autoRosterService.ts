@@ -19,7 +19,7 @@ export class AutoRosterService {
       flightNumber: 'BD 822',
       sector: 'Dubai - Colombo',
       departure: '23:15',
-      arrival: '5:20',
+      arrival: '05:20+1',
       frequency: 'Daily',
       duration: 4.5,
       crewRequirement: { captains: 1, firstOfficers: 1, cabinCrew: 3, seniorCabinCrew: 1 }
@@ -28,8 +28,8 @@ export class AutoRosterService {
     {
       flightNumber: 'BD 921',
       sector: 'Colombo - Malé',
-      departure: '7:05',
-      arrival: '8:05',
+      departure: '07:05',
+      arrival: '08:05',
       frequency: 'Day 1,3,5,7',
       duration: 1.5,
       crewRequirement: { captains: 1, firstOfficers: 1, cabinCrew: 2, seniorCabinCrew: 1 }
@@ -37,7 +37,7 @@ export class AutoRosterService {
     {
       flightNumber: 'BD 922',
       sector: 'Malé - Colombo',
-      departure: '9:05',
+      departure: '09:05',
       arrival: '11:10',
       frequency: 'Day 1,3,5,7',
       duration: 1.5,
@@ -48,7 +48,7 @@ export class AutoRosterService {
       flightNumber: 'BD 931',
       sector: 'Colombo - Dhaka',
       departure: '21:30',
-      arrival: '1:15',
+      arrival: '01:15+1',
       frequency: 'Day 2,3,4,6,7',
       duration: 2.75,
       crewRequirement: { captains: 1, firstOfficers: 1, cabinCrew: 3, seniorCabinCrew: 1 }
@@ -56,8 +56,8 @@ export class AutoRosterService {
     {
       flightNumber: 'BD 932',
       sector: 'Dhaka - Colombo',
-      departure: '2:15',
-      arrival: '5:15',
+      departure: '02:15',
+      arrival: '05:15',
       frequency: 'Day 2,3,4,6,7',
       duration: 2.75,
       crewRequirement: { captains: 1, firstOfficers: 1, cabinCrew: 3, seniorCabinCrew: 1 }
@@ -66,7 +66,7 @@ export class AutoRosterService {
     {
       flightNumber: 'BD 721',
       sector: 'Colombo - Kuala Lumpur',
-      departure: '9:05',
+      departure: '09:05',
       arrival: '15:30',
       frequency: 'Day 1,5',
       duration: 3.5,
@@ -93,41 +93,84 @@ export class AutoRosterService {
     const crewMembers = await crewService.getCrewMembers();
     const newAssignments: RosterAssignment[] = [];
     const violations: string[] = [];
+    const unassignedFlights: string[] = [];
 
     // Generate flight assignments for each day in the period
     const currentDate = new Date(startDate);
     
     while (currentDate <= endDate) {
-      const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const dayOfWeek = currentDate.getDay();
+      const dayOfMonth = currentDate.getDate();
       
       // Process each flight schedule for this day
       for (const flightSchedule of this.FLIGHT_SCHEDULES) {
-        if (this.shouldOperateOnDay(flightSchedule.frequency, currentDate, dayOfWeek)) {
+        if (this.shouldOperateOnDay(flightSchedule.frequency, currentDate, dayOfWeek, dayOfMonth)) {
+          console.log(`Processing flight ${flightSchedule.flightNumber} for ${currentDate.toDateString()}`);
+          
           const flightAssignments = this.assignCrewToFlight(
             flightSchedule,
-            currentDate,
+            new Date(currentDate),
             crewMembers,
             [...existingAssignments, ...newAssignments]
           );
           
-          // Validate each assignment
+          // Check if we have minimum required crew
+          const totalRequiredCrew = 
+            flightSchedule.crewRequirement.captains + 
+            flightSchedule.crewRequirement.firstOfficers + 
+            flightSchedule.crewRequirement.cabinCrew + 
+            flightSchedule.crewRequirement.seniorCabinCrew;
+          
+          if (flightAssignments.assignments.length < totalRequiredCrew) {
+            unassignedFlights.push(`${flightSchedule.flightNumber} on ${currentDate.toDateString()} - insufficient crew (need ${totalRequiredCrew}, got ${flightAssignments.assignments.length})`);
+          }
+          
+          // Validate each assignment against rules
+          const validAssignments: RosterAssignment[] = [];
           for (const assignment of flightAssignments.assignments) {
             const crewMember = crewMembers.find(c => c.id === assignment.crewMemberId);
             if (crewMember) {
               const validation = RosterRulesEngine.validateAssignment(
                 crewMember,
-                [...existingAssignments, ...newAssignments],
+                [...existingAssignments, ...newAssignments, ...validAssignments],
                 assignment
               );
               
               if (validation.valid) {
-                newAssignments.push(assignment);
+                validAssignments.push(assignment);
               } else {
-                violations.push(`${crewMember.name}: ${validation.violations.join(', ')}`);
+                violations.push(`${crewMember.name} on ${flightSchedule.flightNumber}: ${validation.violations.join(', ')}`);
+                // Try to find alternative crew if rules are violated
+                const alternativeCrew = this.findAlternativeCrew(
+                  crewMembers,
+                  assignment.position!,
+                  assignment.startTime,
+                  assignment.endTime,
+                  [...existingAssignments, ...newAssignments, ...validAssignments]
+                );
+                
+                if (alternativeCrew) {
+                  const altAssignment: RosterAssignment = {
+                    ...assignment,
+                    crewMemberId: alternativeCrew.id
+                  };
+                  
+                  const altValidation = RosterRulesEngine.validateAssignment(
+                    alternativeCrew,
+                    [...existingAssignments, ...newAssignments, ...validAssignments],
+                    altAssignment
+                  );
+                  
+                  if (altValidation.valid) {
+                    validAssignments.push(altAssignment);
+                    console.log(`Assigned alternative crew: ${alternativeCrew.name} for ${flightSchedule.flightNumber}`);
+                  }
+                }
               }
             }
           }
           
+          newAssignments.push(...validAssignments);
           violations.push(...flightAssignments.violations);
         }
       }
@@ -135,8 +178,8 @@ export class AutoRosterService {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Generate off days and office duties
-    const additionalAssignments = this.generateOffDaysAndOfficeDuties(
+    // Generate off days and office duties to comply with regulations
+    const additionalAssignments = this.generateMandatoryOffDaysAndDuties(
       crewMembers,
       startDate,
       endDate,
@@ -145,7 +188,10 @@ export class AutoRosterService {
     
     newAssignments.push(...additionalAssignments);
 
-    console.log(`Generated ${newAssignments.length} assignments with ${violations.length} violations`);
+    // Add unassigned flights to violations
+    violations.push(...unassignedFlights);
+
+    console.log(`Generated ${newAssignments.length} assignments with ${violations.length} issues`);
     
     return {
       assignments: newAssignments,
@@ -153,14 +199,15 @@ export class AutoRosterService {
     };
   }
 
-  private static shouldOperateOnDay(frequency: string, date: Date, dayOfWeek: number): boolean {
+  private static shouldOperateOnDay(frequency: string, date: Date, dayOfWeek: number, dayOfMonth: number): boolean {
     if (frequency === 'Daily') return true;
     
-    // Parse frequency like "Day 1,3,5,7" or "Day 2,3,4,6,7"
+    // Parse frequency like "Day 1,3,5,7" - these represent days of the week
     if (frequency.startsWith('Day ')) {
       const days = frequency.replace('Day ', '').split(',').map(d => parseInt(d.trim()));
-      const dayOfMonth = date.getDate();
-      return days.some(day => dayOfMonth % 7 === day % 7);
+      // Map to JavaScript day numbering (0=Sunday, 1=Monday, etc.)
+      const mappedDays = days.map(day => day === 7 ? 0 : day); // Convert 7 to 0 (Sunday)
+      return mappedDays.includes(dayOfWeek);
     }
     
     return false;
@@ -175,87 +222,80 @@ export class AutoRosterService {
     const assignments: RosterAssignment[] = [];
     const violations: string[] = [];
 
-    // Parse departure time
+    // Parse departure time and handle next day arrivals
     const [depHours, depMinutes] = flightSchedule.departure.split(':').map(Number);
     const startTime = new Date(date);
     startTime.setHours(depHours, depMinutes, 0, 0);
     
     const endTime = new Date(startTime);
-    endTime.setHours(endTime.getHours() + flightSchedule.duration);
+    endTime.setHours(endTime.getHours() + Math.floor(flightSchedule.duration));
+    endTime.setMinutes(endTime.getMinutes() + ((flightSchedule.duration % 1) * 60));
 
-    // Assign Captains
-    const availableCaptains = this.getAvailableCrewByRole(
+    // Priority assignment: Captains first, then First Officers, then Cabin Crew
+    const assignmentPriority = [
+      { role: 'Captain', count: flightSchedule.crewRequirement.captains, position: 'Captain' },
+      { role: 'First Officer', count: flightSchedule.crewRequirement.firstOfficers, position: 'First Officer' },
+      { role: 'Flight Attendant', count: flightSchedule.crewRequirement.seniorCabinCrew, position: 'Senior Cabin Crew' },
+      { role: 'Flight Attendant', count: flightSchedule.crewRequirement.cabinCrew, position: 'Cabin Crew' }
+    ];
+
+    for (const { role, count, position } of assignmentPriority) {
+      const availableCrew = this.getAvailableCrewByRole(
+        crewMembers,
+        role,
+        startTime,
+        endTime,
+        [...existingAssignments, ...assignments]
+      );
+      
+      const assigned = Math.min(count, availableCrew.length);
+      
+      for (let i = 0; i < assigned; i++) {
+        assignments.push({
+          crewMemberId: availableCrew[i].id,
+          eventType: 'flight',
+          startTime: new Date(startTime),
+          endTime: new Date(endTime),
+          flightNumber: flightSchedule.flightNumber,
+          position: position as any
+        });
+      }
+      
+      if (assigned < count) {
+        violations.push(`Insufficient ${role}s for flight ${flightSchedule.flightNumber} on ${date.toDateString()} (need ${count}, got ${assigned})`);
+      }
+    }
+
+    return { assignments, violations };
+  }
+
+  private static findAlternativeCrew(
+    crewMembers: CrewMember[],
+    position: string,
+    startTime: Date,
+    endTime: Date,
+    existingAssignments: RosterAssignment[]
+  ): CrewMember | null {
+    const roleMap: { [key: string]: string } = {
+      'Captain': 'Captain',
+      'First Officer': 'First Officer',
+      'Senior Cabin Crew': 'Flight Attendant',
+      'Cabin Crew': 'Flight Attendant'
+    };
+    
+    const targetRole = roleMap[position];
+    if (!targetRole) return null;
+    
+    const availableCrew = this.getAvailableCrewByRole(
       crewMembers,
-      'Captain',
+      targetRole,
       startTime,
       endTime,
       existingAssignments
     );
     
-    for (let i = 0; i < Math.min(flightSchedule.crewRequirement.captains, availableCaptains.length); i++) {
-      assignments.push({
-        crewMemberId: availableCaptains[i].id,
-        eventType: 'flight',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        flightNumber: flightSchedule.flightNumber,
-        position: 'Captain'
-      });
-    }
-
-    // Assign First Officers
-    const availableFirstOfficers = this.getAvailableCrewByRole(
-      crewMembers,
-      'First Officer',
-      startTime,
-      endTime,
-      [...existingAssignments, ...assignments]
-    );
-    
-    for (let i = 0; i < Math.min(flightSchedule.crewRequirement.firstOfficers, availableFirstOfficers.length); i++) {
-      assignments.push({
-        crewMemberId: availableFirstOfficers[i].id,
-        eventType: 'flight',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        flightNumber: flightSchedule.flightNumber,
-        position: 'First Officer'
-      });
-    }
-
-    // Assign Cabin Crew (treating all flight attendants as cabin crew for now)
-    const availableCabinCrew = this.getAvailableCrewByRole(
-      crewMembers,
-      'Flight Attendant',
-      startTime,
-      endTime,
-      [...existingAssignments, ...assignments]
-    );
-    
-    const totalCabinCrewNeeded = flightSchedule.crewRequirement.cabinCrew + flightSchedule.crewRequirement.seniorCabinCrew;
-    
-    for (let i = 0; i < Math.min(totalCabinCrewNeeded, availableCabinCrew.length); i++) {
-      assignments.push({
-        crewMemberId: availableCabinCrew[i].id,
-        eventType: 'flight',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        flightNumber: flightSchedule.flightNumber,
-        position: i < flightSchedule.crewRequirement.seniorCabinCrew ? 'Senior Cabin Crew' : 'Cabin Crew'
-      });
-    }
-
-    // Check if we have enough crew
-    if (assignments.length < (
-      flightSchedule.crewRequirement.captains + 
-      flightSchedule.crewRequirement.firstOfficers + 
-      flightSchedule.crewRequirement.cabinCrew + 
-      flightSchedule.crewRequirement.seniorCabinCrew
-    )) {
-      violations.push(`Insufficient crew for flight ${flightSchedule.flightNumber} on ${date.toDateString()}`);
-    }
-
-    return { assignments, violations };
+    // Return the crew member with the least flight hours (load balancing)
+    return availableCrew.length > 0 ? availableCrew[0] : null;
   }
 
   private static getAvailableCrewByRole(
@@ -268,19 +308,19 @@ export class AutoRosterService {
     return crewMembers
       .filter(crew => crew.role === role)
       .filter(crew => {
-        // Check if crew member is available during this time
+        // Check if crew member is available during this time (including buffer time for rest)
+        const bufferTime = 2 * 60 * 60 * 1000; // 2 hours buffer in milliseconds
         const conflicts = existingAssignments.filter(assignment => 
           assignment.crewMemberId === crew.id &&
-          ((assignment.startTime <= startTime && assignment.endTime > startTime) ||
-           (assignment.startTime < endTime && assignment.endTime >= endTime) ||
-           (assignment.startTime >= startTime && assignment.endTime <= endTime))
+          !(assignment.endTime.getTime() + bufferTime <= startTime.getTime() || 
+            assignment.startTime.getTime() >= endTime.getTime() + bufferTime)
         );
         return conflicts.length === 0;
       })
-      .sort((a, b) => a.totalFlightHours - b.totalFlightHours); // Prefer crew with fewer hours
+      .sort((a, b) => a.totalFlightHours - b.totalFlightHours); // Prefer crew with fewer hours for load balancing
   }
 
-  private static generateOffDaysAndOfficeDuties(
+  private static generateMandatoryOffDaysAndDuties(
     crewMembers: CrewMember[],
     startDate: Date,
     endDate: Date,
@@ -290,7 +330,7 @@ export class AutoRosterService {
     
     crewMembers.forEach(crewMember => {
       const currentDate = new Date(startDate);
-      let daysSinceLastOff = 0;
+      let consecutiveWorkDays = 0;
       
       while (currentDate <= endDate) {
         const dayStart = new Date(currentDate);
@@ -306,27 +346,35 @@ export class AutoRosterService {
         );
         
         if (dayAssignments.length === 0) {
-          daysSinceLastOff++;
+          // No assignments, need to assign off day or office duty
+          consecutiveWorkDays = 0;
           
-          // Assign off day if it's been 6 days since last off (ensuring 1 off day in 7)
-          if (daysSinceLastOff >= 6 || currentDate.getDay() === 0) { // Sunday preference for off days
+          // Mandatory off day every 7th day or on Sundays
+          if (consecutiveWorkDays >= 6 || currentDate.getDay() === 0) {
             assignments.push({
               crewMemberId: crewMember.id,
               eventType: 'off',
               startTime: new Date(dayStart),
               endTime: new Date(dayEnd)
             });
-            daysSinceLastOff = 0;
-          } else if (Math.random() < 0.3) { // 30% chance of office duty on free days
+          } else if (Math.random() < 0.2) { // 20% chance of office duty
             assignments.push({
               crewMemberId: crewMember.id,
               eventType: 'office_duty',
               startTime: new Date(dayStart.setHours(9, 0, 0, 0)),
               endTime: new Date(dayStart.setHours(17, 0, 0, 0))
             });
+          } else {
+            // Assign off day to ensure compliance
+            assignments.push({
+              crewMemberId: crewMember.id,
+              eventType: 'off',
+              startTime: new Date(dayStart),
+              endTime: new Date(dayEnd)
+            });
           }
         } else {
-          daysSinceLastOff = 0;
+          consecutiveWorkDays++;
         }
         
         currentDate.setDate(currentDate.getDate() + 1);
@@ -338,5 +386,18 @@ export class AutoRosterService {
 
   static getFlightSchedules(): FlightScheduleData[] {
     return [...this.FLIGHT_SCHEDULES];
+  }
+
+  static getCrewRequirementSummary(): { [role: string]: number } {
+    const summary = { Captain: 0, 'First Officer': 0, 'Cabin Crew': 0, 'Senior Cabin Crew': 0 };
+    
+    this.FLIGHT_SCHEDULES.forEach(flight => {
+      summary.Captain += flight.crewRequirement.captains;
+      summary['First Officer'] += flight.crewRequirement.firstOfficers;
+      summary['Cabin Crew'] += flight.crewRequirement.cabinCrew;
+      summary['Senior Cabin Crew'] += flight.crewRequirement.seniorCabinCrew;
+    });
+    
+    return summary;
   }
 }

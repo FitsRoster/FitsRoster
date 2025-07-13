@@ -50,17 +50,17 @@ export class RosterRulesEngine {
         // Check 7 days
         const last7Days = new Date(now);
         last7Days.setDate(now.getDate() - 7);
-        const dutyHours7Days = this.calculateDutyHours(assignments, last7Days);
+        const dutyHours7Days = RosterRulesEngine.calculateDutyHours(assignments, last7Days);
         
         // Check 14 days
         const last14Days = new Date(now);
         last14Days.setDate(now.getDate() - 14);
-        const dutyHours14Days = this.calculateDutyHours(assignments, last14Days);
+        const dutyHours14Days = RosterRulesEngine.calculateDutyHours(assignments, last14Days);
         
         // Check 28 days
         const last28Days = new Date(now);
         last28Days.setDate(now.getDate() - 28);
-        const dutyHours28Days = this.calculateDutyHours(assignments, last28Days);
+        const dutyHours28Days = RosterRulesEngine.calculateDutyHours(assignments, last28Days);
         
         return dutyHours7Days <= 55 && dutyHours14Days <= 95 && dutyHours28Days <= 190;
       }
@@ -68,10 +68,10 @@ export class RosterRulesEngine {
     {
       id: 'minimum_rest_between_duties',
       type: 'rest',
-      description: 'Minimum rest period between duties',
+      description: 'Minimum 12 hours rest between duties',
       validate: (crewMember: CrewMember, assignments: RosterAssignment[]) => {
         const sortedAssignments = assignments
-          .filter(a => a.eventType === 'flight' || a.eventType === 'office_duty')
+          .filter(a => a.crewMemberId === crewMember.id && (a.eventType === 'flight' || a.eventType === 'office_duty'))
           .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
         
         for (let i = 1; i < sortedAssignments.length; i++) {
@@ -79,7 +79,7 @@ export class RosterRulesEngine {
           const currentStart = sortedAssignments[i].startTime;
           const restHours = (currentStart.getTime() - previousEnd.getTime()) / (1000 * 60 * 60);
           
-          if (restHours < 12) { // Minimum 12 hours rest
+          if (restHours < 12) {
             return false;
           }
         }
@@ -92,22 +92,68 @@ export class RosterRulesEngine {
       type: 'off_days',
       description: 'Off days requirements: 1 in 7 days, 2 consecutive in 14 days',
       validate: (crewMember: CrewMember, assignments: RosterAssignment[]) => {
-        const last7Days = new Date();
-        last7Days.setDate(last7Days.getDate() - 7);
+        const now = new Date();
+        const last7Days = new Date(now);
+        last7Days.setDate(now.getDate() - 7);
+        
+        const last14Days = new Date(now);
+        last14Days.setDate(now.getDate() - 14);
+        
+        // Count off days in last 7 days
         const offDays7 = assignments.filter(a => 
-          a.eventType === 'off' && a.startTime >= last7Days
+          a.crewMemberId === crewMember.id &&
+          a.eventType === 'off' && 
+          a.startTime >= last7Days
         ).length;
         
-        const last14Days = new Date();
-        last14Days.setDate(last14Days.getDate() - 14);
+        // Get off days in last 14 days for consecutive check
         const offDays14 = assignments.filter(a => 
-          a.eventType === 'off' && a.startTime >= last14Days
+          a.crewMemberId === crewMember.id &&
+          a.eventType === 'off' && 
+          a.startTime >= last14Days
         );
         
         // Check for consecutive off days in last 14 days
-        const hasConsecutiveOffDays = this.hasConsecutiveOffDays(offDays14, 2);
+        const hasConsecutiveOffDays = RosterRulesEngine.hasConsecutiveOffDays(offDays14, 2);
         
         return offDays7 >= 1 && hasConsecutiveOffDays;
+      }
+    },
+    {
+      id: 'max_consecutive_duty_days',
+      type: 'duty_time',
+      description: 'Maximum 6 consecutive duty days',
+      validate: (crewMember: CrewMember, assignments: RosterAssignment[]) => {
+        const sortedAssignments = assignments
+          .filter(a => a.crewMemberId === crewMember.id && a.eventType === 'flight')
+          .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+        
+        let consecutiveDays = 0;
+        let lastDutyDate: Date | null = null;
+        
+        for (const assignment of sortedAssignments) {
+          const currentDate = new Date(assignment.startTime);
+          currentDate.setHours(0, 0, 0, 0);
+          
+          if (lastDutyDate) {
+            const daysDiff = Math.floor((currentDate.getTime() - lastDutyDate.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysDiff === 1) {
+              consecutiveDays++;
+            } else if (daysDiff > 1) {
+              consecutiveDays = 1;
+            }
+          } else {
+            consecutiveDays = 1;
+          }
+          
+          if (consecutiveDays > 6) {
+            return false;
+          }
+          
+          lastDutyDate = currentDate;
+        }
+        
+        return true;
       }
     }
   ];
@@ -128,12 +174,18 @@ export class RosterRulesEngine {
     
     for (let i = 0; i <= sortedDays.length - requiredConsecutive; i++) {
       let consecutiveCount = 1;
+      let currentDate = new Date(sortedDays[i].startTime);
+      currentDate.setHours(0, 0, 0, 0);
+      
       for (let j = i + 1; j < sortedDays.length; j++) {
-        const daysDiff = Math.floor(
-          (sortedDays[j].startTime.getTime() - sortedDays[j-1].startTime.getTime()) / (1000 * 60 * 60 * 24)
-        );
+        const nextDate = new Date(sortedDays[j].startTime);
+        nextDate.setHours(0, 0, 0, 0);
+        
+        const daysDiff = Math.floor((nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+        
         if (daysDiff === 1) {
           consecutiveCount++;
+          currentDate = nextDate;
           if (consecutiveCount >= requiredConsecutive) return true;
         } else {
           break;
@@ -149,12 +201,32 @@ export class RosterRulesEngine {
     currentAssignments: RosterAssignment[], 
     newAssignment: RosterAssignment
   ): { valid: boolean; violations: string[] } {
-    const allAssignments = [...currentAssignments, newAssignment];
+    const crewAssignments = currentAssignments.filter(a => a.crewMemberId === crewMember.id);
+    const allAssignments = [...crewAssignments, newAssignment];
     const violations: string[] = [];
 
     for (const rule of this.RULES) {
       if (!rule.validate(crewMember, allAssignments)) {
         violations.push(rule.description);
+      }
+    }
+
+    return {
+      valid: violations.length === 0,
+      violations
+    };
+  }
+
+  static validateCrewMemberAssignments(
+    crewMember: CrewMember,
+    assignments: RosterAssignment[]
+  ): { valid: boolean; violations: string[] } {
+    const crewAssignments = assignments.filter(a => a.crewMemberId === crewMember.id);
+    const violations: string[] = [];
+
+    for (const rule of this.RULES) {
+      if (!rule.validate(crewMember, crewAssignments)) {
+        violations.push(`${crewMember.name}: ${rule.description}`);
       }
     }
 

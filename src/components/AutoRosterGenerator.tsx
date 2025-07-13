@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Clock, Users, AlertTriangle, CheckCircle, Plane } from 'lucide-react';
+import { Calendar, Clock, Users, AlertTriangle, CheckCircle, Plane, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AutoRosterService } from '../services/autoRosterService';
 import { RosterAssignment } from '../types/rosterTypes';
@@ -44,21 +44,55 @@ const AutoRosterGenerator = () => {
       return;
     }
 
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 30) {
+      toast({
+        title: 'Warning',
+        description: 'Generating roster for more than 30 days may take longer',
+      });
+    }
+
     setIsGenerating(true);
     try {
       console.log('Generating auto roster for period:', start, 'to', end);
-      const result = await AutoRosterService.generateAutoRoster(start, end);
+      
+      // Get existing assignments to avoid conflicts
+      const existingFlights = await crewService.getFlightAssignments();
+      const existingEvents = await crewService.getCrewEvents();
+      
+      const existingAssignments: RosterAssignment[] = [
+        ...existingFlights.map(f => ({
+          crewMemberId: f.crewMemberId,
+          eventType: 'flight' as const,
+          startTime: f.startTime,
+          endTime: f.endTime,
+          flightNumber: f.flightNumber,
+          position: 'Captain' as const // Default, would need proper mapping
+        })),
+        ...existingEvents.map(e => ({
+          crewMemberId: e.crewMemberId,
+          eventType: e.type === 'OFF' ? 'off' as const : 'office_duty' as const,
+          startTime: e.startTime,
+          endTime: e.endTime
+        }))
+      ];
+      
+      const result = await AutoRosterService.generateAutoRoster(start, end, existingAssignments);
       setGeneratedRoster(result);
       
+      const flightCount = result.assignments.filter(a => a.eventType === 'flight').length;
+      const violationCount = result.violations.length;
+      
       toast({
-        title: 'Roster Generated',
-        description: `Generated ${result.assignments.length} assignments with ${result.violations.length} violations`,
+        title: 'Roster Generated Successfully',
+        description: `Generated ${flightCount} flight assignments with ${violationCount} compliance issues`,
+        variant: violationCount === 0 ? 'default' : 'destructive'
       });
     } catch (error) {
       console.error('Error generating roster:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to generate roster',
+        title: 'Generation Failed',
+        description: 'Failed to generate roster. Please check crew availability.',
         variant: 'destructive',
       });
     } finally {
@@ -71,45 +105,50 @@ const AutoRosterGenerator = () => {
 
     setIsGenerating(true);
     try {
-      // Convert roster assignments to crew events/flight assignments
+      let appliedCount = 0;
+      
+      // Apply assignments in batches to avoid overwhelming the system
       for (const assignment of generatedRoster.assignments) {
-        if (assignment.eventType === 'flight') {
-          // Create flight assignment
-          await crewService.addFlightAssignment({
-            crewMemberId: assignment.crewMemberId,
-            flightNumber: assignment.flightNumber || 'Unknown',
-            route: 'Auto-generated',
-            startTime: assignment.startTime,
-            endTime: assignment.endTime,
-            duration: (assignment.endTime.getTime() - assignment.startTime.getTime()) / (1000 * 60 * 60),
-            type: 'domestic',
-            status: 'scheduled'
-          });
-        } else {
-          // Create crew event
-          await crewService.addCrewEvent({
-            crewMemberId: assignment.crewMemberId,
-            type: assignment.eventType === 'off' ? 'OFF' : 
-                  assignment.eventType === 'office_duty' ? 'Office Duty' :
-                  assignment.eventType === 'standby' ? 'Standby' : 'OFF',
-            startTime: assignment.startTime,
-            endTime: assignment.endTime,
-            notes: `Auto-generated ${assignment.eventType}`
-          });
+        try {
+          if (assignment.eventType === 'flight') {
+            await crewService.addFlightAssignment({
+              crewMemberId: assignment.crewMemberId,
+              flightNumber: assignment.flightNumber || 'Unknown',
+              route: 'Auto-generated route',
+              startTime: assignment.startTime,
+              endTime: assignment.endTime,
+              duration: (assignment.endTime.getTime() - assignment.startTime.getTime()) / (1000 * 60 * 60),
+              type: 'international',
+              status: 'scheduled'
+            });
+          } else {
+            await crewService.addCrewEvent({
+              crewMemberId: assignment.crewMemberId,
+              type: assignment.eventType === 'off' ? 'OFF' : 
+                    assignment.eventType === 'office_duty' ? 'Office Duty' :
+                    assignment.eventType === 'standby' ? 'Standby' : 'OFF',
+              startTime: assignment.startTime,
+              endTime: assignment.endTime,
+              notes: `Auto-generated ${assignment.eventType} - ${assignment.position || ''}`
+            });
+          }
+          appliedCount++;
+        } catch (error) {
+          console.error('Failed to apply assignment:', assignment, error);
         }
       }
 
       toast({
-        title: 'Roster Applied',
-        description: `Applied ${generatedRoster.assignments.length} assignments to the roster`,
+        title: 'Roster Applied Successfully',
+        description: `Applied ${appliedCount} of ${generatedRoster.assignments.length} assignments to the roster`,
       });
 
       setGeneratedRoster(null);
     } catch (error) {
       console.error('Error applying roster:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to apply roster',
+        title: 'Application Failed',
+        description: 'Failed to apply some roster assignments',
         variant: 'destructive',
       });
     } finally {
@@ -118,6 +157,7 @@ const AutoRosterGenerator = () => {
   };
 
   const flightSchedules = AutoRosterService.getFlightSchedules();
+  const crewRequirements = AutoRosterService.getCrewRequirementSummary();
 
   return (
     <div className="space-y-6">
@@ -125,7 +165,7 @@ const AutoRosterGenerator = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Plane className="h-5 w-5" />
-            Auto Roster Generator
+            Intelligent Auto Roster Generator
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -159,7 +199,7 @@ const AutoRosterGenerator = () => {
               className="flex items-center gap-2"
             >
               <Calendar className="h-4 w-4" />
-              {isGenerating ? 'Generating...' : 'Generate Roster'}
+              {isGenerating ? 'Generating...' : 'Generate Smart Roster'}
             </Button>
             
             {generatedRoster && (
@@ -170,9 +210,25 @@ const AutoRosterGenerator = () => {
                 className="flex items-center gap-2"
               >
                 <CheckCircle className="h-4 w-4" />
-                Apply to Roster
+                Apply to Live Roster
               </Button>
             )}
+          </div>
+
+          {/* Crew Requirements Summary */}
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Daily Crew Requirements
+            </h4>
+            <div className="grid grid-cols-4 gap-2 text-sm">
+              {Object.entries(crewRequirements).map(([role, count]) => (
+                <div key={role} className="text-center">
+                  <div className="font-semibold text-blue-600">{count}</div>
+                  <div className="text-gray-600">{role}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -182,29 +238,31 @@ const AutoRosterGenerator = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Flight Schedules Reference
+            Flight Schedule Overview ({flightSchedules.length} routes)
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {flightSchedules.map((flight, index) => (
-              <div key={index} className="border rounded-lg p-3 space-y-2">
+              <div key={index} className="border rounded-lg p-3 space-y-2 hover:bg-gray-50">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-semibold">{flight.flightNumber}</div>
+                    <div className="font-semibold text-blue-600">{flight.flightNumber}</div>
                     <div className="text-sm text-gray-600">{flight.sector}</div>
                   </div>
-                  <Badge variant="outline">{flight.frequency}</Badge>
+                  <Badge variant="outline" className="text-xs">{flight.frequency}</Badge>
                 </div>
                 <div className="text-sm">
-                  <div>Departure: {flight.departure} | Arrival: {flight.arrival}</div>
-                  <div>Duration: {flight.duration}h</div>
+                  <div className="flex justify-between">
+                    <span>Departure: {flight.departure}</span>
+                    <span>Duration: {flight.duration}h</span>
+                  </div>
                 </div>
-                <div className="flex gap-2 text-xs">
-                  <Badge variant="secondary">C: {flight.crewRequirement.captains}</Badge>
-                  <Badge variant="secondary">FO: {flight.crewRequirement.firstOfficers}</Badge>
-                  <Badge variant="secondary">CC: {flight.crewRequirement.cabinCrew}</Badge>
-                  <Badge variant="secondary">SCC: {flight.crewRequirement.seniorCabinCrew}</Badge>
+                <div className="flex gap-1 text-xs">
+                  <Badge variant="secondary" className="px-1 py-0">C:{flight.crewRequirement.captains}</Badge>
+                  <Badge variant="secondary" className="px-1 py-0">FO:{flight.crewRequirement.firstOfficers}</Badge>
+                  <Badge variant="secondary" className="px-1 py-0">CC:{flight.crewRequirement.cabinCrew}</Badge>
+                  <Badge variant="secondary" className="px-1 py-0">SCC:{flight.crewRequirement.seniorCabinCrew}</Badge>
                 </div>
               </div>
             ))}
@@ -218,28 +276,34 @@ const AutoRosterGenerator = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Generated Roster Results
+              Generated Roster Analysis
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">
                   {generatedRoster.assignments.filter(a => a.eventType === 'flight').length}
                 </div>
                 <div className="text-sm text-gray-600">Flight Assignments</div>
               </div>
-              <div className="text-center">
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
                   {generatedRoster.assignments.filter(a => a.eventType === 'off').length}
                 </div>
                 <div className="text-sm text-gray-600">Off Days</div>
               </div>
-              <div className="text-center">
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
                 <div className="text-2xl font-bold text-orange-600">
                   {generatedRoster.assignments.filter(a => a.eventType === 'office_duty').length}
                 </div>
                 <div className="text-sm text-gray-600">Office Duties</div>
+              </div>
+              <div className="text-center p-3 bg-red-50 rounded-lg">
+                <div className="text-2xl font-bold text-red-600">
+                  {generatedRoster.violations.length}
+                </div>
+                <div className="text-sm text-gray-600">Compliance Issues</div>
               </div>
             </div>
 
@@ -249,35 +313,36 @@ const AutoRosterGenerator = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-red-600">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="font-semibold">Violations ({generatedRoster.violations.length})</span>
+                  <span className="font-semibold">Compliance Issues ({generatedRoster.violations.length})</span>
                 </div>
-                <div className="space-y-1">
-                  {generatedRoster.violations.slice(0, 10).map((violation, index) => (
-                    <div key={index} className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                <div className="max-h-60 overflow-y-auto space-y-1">
+                  {generatedRoster.violations.slice(0, 20).map((violation, index) => (
+                    <div key={index} className="text-sm text-red-600 bg-red-50 p-2 rounded border-l-2 border-red-200">
                       {violation}
                     </div>
                   ))}
-                  {generatedRoster.violations.length > 10 && (
-                    <div className="text-sm text-gray-500">
-                      ... and {generatedRoster.violations.length - 10} more violations
+                  {generatedRoster.violations.length > 20 && (
+                    <div className="text-sm text-gray-500 text-center p-2">
+                      ... and {generatedRoster.violations.length - 20} more issues
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            <div className="text-sm text-gray-600">
-              <div className="font-medium mb-2">Assignment Summary:</div>
-              <div className="space-y-1">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-medium mb-2">Assignment Distribution:</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 {Object.entries(
                   generatedRoster.assignments.reduce((acc, assignment) => {
-                    acc[assignment.eventType] = (acc[assignment.eventType] || 0) + 1;
+                    const key = assignment.eventType + (assignment.position ? ` (${assignment.position})` : '');
+                    acc[key] = (acc[key] || 0) + 1;
                     return acc;
                   }, {} as Record<string, number>)
                 ).map(([type, count]) => (
-                  <div key={type} className="flex justify-between">
+                  <div key={type} className="flex justify-between py-1">
                     <span className="capitalize">{type.replace('_', ' ')}:</span>
-                    <span>{count}</span>
+                    <span className="font-medium">{count}</span>
                   </div>
                 ))}
               </div>
