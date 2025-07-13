@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import FlightAssignment from './FlightAssignment';
@@ -100,11 +101,16 @@ const CrewRoster = () => {
       }
 
       const startTime = new Date(timeSlot.dateTime);
-      const [hours, minutes] = flightData.startTime.split(':').map(Number);
-      startTime.setHours(startTime.getHours() + hours, minutes, 0, 0);
+      const [startHours, startMinutes] = flightData.startTime.split(':').map(Number);
+      startTime.setHours(startTime.getHours() + startHours, startMinutes, 0, 0);
       
-      const endTime = new Date(startTime);
-      endTime.setHours(endTime.getHours() + flightData.duration);
+      const [endHours, endMinutes] = flightData.endTime.split(':').map(Number);
+      const endTime = new Date(timeSlot.dateTime);
+      endTime.setHours(endTime.getHours() + endHours, endMinutes, 0, 0);
+      
+      // Calculate duration in hours
+      const durationMs = endTime.getTime() - startTime.getTime();
+      const duration = durationMs / (1000 * 60 * 60);
 
       const newFlight: Omit<FlightAssignmentType, 'id' | 'createdAt'> = {
         crewMemberId,
@@ -112,7 +118,7 @@ const CrewRoster = () => {
         route: flightData.route,
         startTime,
         endTime,
-        duration: flightData.duration,
+        duration,
         type: flightData.type,
         status: 'scheduled',
       };
@@ -357,7 +363,7 @@ const CrewRoster = () => {
             </div>
             <div className="flex relative">
               {timeline.map((slot, index) => (
-                <div key={slot.id} className="w-10 h-24 border-r border-gray-100 relative flex-shrink-0">
+                <div key={slot.id} className="w-10 h-28 border-r border-gray-100 relative flex-shrink-0">
                 </div>
               ))}
               {/* Render assignments with precise positioning */}
@@ -380,13 +386,13 @@ const CrewRoster = () => {
                         flightNumber={assignment.flightNumber!}
                         route={assignment.route!}
                         startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        endTime={assignment.endTime!.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        duration={assignment.durationInHours}
                         type={assignment.flightType!}
                         onRemove={() => handleRemoveFlight(assignment.id)}
                       />
                     ) : (
                       <div 
-                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-20 flex flex-col justify-between`}
+                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-24 flex flex-col justify-between`}
                         title={`${assignment.eventType} - ${assignment.notes || ''}`}
                       >
                         <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
