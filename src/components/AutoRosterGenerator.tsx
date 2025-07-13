@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,21 +43,17 @@ const AutoRosterGenerator = () => {
       return;
     }
 
-    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff > 30) {
-      toast({
-        title: 'Warning',
-        description: 'Generating roster for more than 30 days may take longer',
-      });
-    }
-
     setIsGenerating(true);
     try {
-      console.log('Generating auto roster for period:', start, 'to', end);
+      console.log('Starting roster generation...');
       
       // Get existing assignments to avoid conflicts
-      const existingFlights = await crewService.getFlightAssignments();
-      const existingEvents = await crewService.getCrewEvents();
+      const [existingFlights, existingEvents] = await Promise.all([
+        crewService.getFlightAssignments(),
+        crewService.getCrewEvents()
+      ]);
+      
+      console.log('Existing assignments:', { flights: existingFlights.length, events: existingEvents.length });
       
       const existingAssignments: RosterAssignment[] = [
         ...existingFlights.map(f => ({
@@ -67,11 +62,13 @@ const AutoRosterGenerator = () => {
           startTime: f.startTime,
           endTime: f.endTime,
           flightNumber: f.flightNumber,
-          position: 'Captain' as const // Default, would need proper mapping
+          position: 'Captain' as const // This would need proper mapping in a real system
         })),
         ...existingEvents.map(e => ({
           crewMemberId: e.crewMemberId,
-          eventType: e.type === 'OFF' ? 'off' as const : 'office_duty' as const,
+          eventType: e.type === 'OFF' ? 'off' as const : 
+                    e.type === 'Office Duty' ? 'office_duty' as const :
+                    e.type === 'Standby' ? 'standby' as const : 'off' as const,
           startTime: e.startTime,
           endTime: e.endTime
         }))
@@ -83,16 +80,18 @@ const AutoRosterGenerator = () => {
       const flightCount = result.assignments.filter(a => a.eventType === 'flight').length;
       const violationCount = result.violations.length;
       
+      console.log('Roster generated:', { assignments: result.assignments.length, violations: violationCount });
+      
       toast({
         title: 'Roster Generated Successfully',
-        description: `Generated ${flightCount} flight assignments with ${violationCount} compliance issues`,
+        description: `Generated ${result.assignments.length} assignments (${flightCount} flights) with ${violationCount} compliance issues`,
         variant: violationCount === 0 ? 'default' : 'destructive'
       });
     } catch (error) {
       console.error('Error generating roster:', error);
       toast({
         title: 'Generation Failed',
-        description: 'Failed to generate roster. Please check crew availability.',
+        description: error instanceof Error ? error.message : 'Failed to generate roster',
         variant: 'destructive',
       });
     } finally {
@@ -106,49 +105,64 @@ const AutoRosterGenerator = () => {
     setIsGenerating(true);
     try {
       let appliedCount = 0;
+      let errorCount = 0;
       
-      // Apply assignments in batches to avoid overwhelming the system
+      console.log('Applying roster assignments:', generatedRoster.assignments.length);
+      
+      // Apply assignments one by one with proper error handling
       for (const assignment of generatedRoster.assignments) {
         try {
           if (assignment.eventType === 'flight') {
             await crewService.addFlightAssignment({
               crewMemberId: assignment.crewMemberId,
               flightNumber: assignment.flightNumber || 'Unknown',
-              route: 'Auto-generated route',
+              route: `Auto-generated route for ${assignment.flightNumber}`,
               startTime: assignment.startTime,
               endTime: assignment.endTime,
               duration: (assignment.endTime.getTime() - assignment.startTime.getTime()) / (1000 * 60 * 60),
               type: 'international',
               status: 'scheduled'
             });
+            console.log(`Applied flight assignment: ${assignment.flightNumber}`);
           } else {
+            const eventTypeMap = {
+              'off': 'OFF',
+              'office_duty': 'Office Duty',
+              'standby': 'Standby',
+              'rest': 'OFF'
+            } as const;
+            
             await crewService.addCrewEvent({
               crewMemberId: assignment.crewMemberId,
-              type: assignment.eventType === 'off' ? 'OFF' : 
-                    assignment.eventType === 'office_duty' ? 'Office Duty' :
-                    assignment.eventType === 'standby' ? 'Standby' : 'OFF',
+              type: eventTypeMap[assignment.eventType] || 'OFF',
               startTime: assignment.startTime,
               endTime: assignment.endTime,
               notes: `Auto-generated ${assignment.eventType} - ${assignment.position || ''}`
             });
+            console.log(`Applied crew event: ${assignment.eventType}`);
           }
           appliedCount++;
         } catch (error) {
           console.error('Failed to apply assignment:', assignment, error);
+          errorCount++;
         }
       }
 
       toast({
-        title: 'Roster Applied Successfully',
-        description: `Applied ${appliedCount} of ${generatedRoster.assignments.length} assignments to the roster`,
+        title: 'Roster Applied',
+        description: `Applied ${appliedCount} of ${generatedRoster.assignments.length} assignments${errorCount > 0 ? ` (${errorCount} errors)` : ''}`,
+        variant: errorCount > 0 ? 'destructive' : 'default'
       });
 
-      setGeneratedRoster(null);
+      // Clear generated roster after successful application
+      if (errorCount === 0) {
+        setGeneratedRoster(null);
+      }
     } catch (error) {
       console.error('Error applying roster:', error);
       toast({
         title: 'Application Failed',
-        description: 'Failed to apply some roster assignments',
+        description: 'Failed to apply roster assignments to database',
         variant: 'destructive',
       });
     } finally {
@@ -276,7 +290,7 @@ const AutoRosterGenerator = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Generated Roster Analysis
+              Generated Roster Analysis ({generatedRoster.assignments.length} total assignments)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -309,6 +323,27 @@ const AutoRosterGenerator = () => {
 
             <Separator />
 
+            {/* Detailed Assignment Breakdown */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-medium mb-2">Assignment Breakdown by Position:</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {Object.entries(
+                  generatedRoster.assignments
+                    .filter(a => a.eventType === 'flight')
+                    .reduce((acc, assignment) => {
+                      const key = assignment.position || 'Unknown';
+                      acc[key] = (acc[key] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                ).map(([position, count]) => (
+                  <div key={position} className="flex justify-between py-1">
+                    <span>{position}:</span>
+                    <span className="font-medium">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {generatedRoster.violations.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-red-600">
@@ -316,37 +351,19 @@ const AutoRosterGenerator = () => {
                   <span className="font-semibold">Compliance Issues ({generatedRoster.violations.length})</span>
                 </div>
                 <div className="max-h-60 overflow-y-auto space-y-1">
-                  {generatedRoster.violations.slice(0, 20).map((violation, index) => (
+                  {generatedRoster.violations.slice(0, 10).map((violation, index) => (
                     <div key={index} className="text-sm text-red-600 bg-red-50 p-2 rounded border-l-2 border-red-200">
                       {violation}
                     </div>
                   ))}
-                  {generatedRoster.violations.length > 20 && (
+                  {generatedRoster.violations.length > 10 && (
                     <div className="text-sm text-gray-500 text-center p-2">
-                      ... and {generatedRoster.violations.length - 20} more issues
+                      ... and {generatedRoster.violations.length - 10} more issues
                     </div>
                   )}
                 </div>
               </div>
             )}
-
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="font-medium mb-2">Assignment Distribution:</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {Object.entries(
-                  generatedRoster.assignments.reduce((acc, assignment) => {
-                    const key = assignment.eventType + (assignment.position ? ` (${assignment.position})` : '');
-                    acc[key] = (acc[key] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
-                ).map(([type, count]) => (
-                  <div key={type} className="flex justify-between py-1">
-                    <span className="capitalize">{type.replace('_', ' ')}:</span>
-                    <span className="font-medium">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}
