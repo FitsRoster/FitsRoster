@@ -20,7 +20,7 @@ const CrewRoster = () => {
   // Generate the same timeline as the header
   const timeline = generateTimeSlots();
   const totalTimeSlots = timeline.length;
-  const SLOT_WIDTH = 64; // 16 * 4 (w-16 = 64px)
+  const SLOT_WIDTH = 40; // Updated to match RosterHeader
 
   useEffect(() => {
     loadData();
@@ -88,7 +88,7 @@ const CrewRoster = () => {
     flightNumber: string;
     route: string;
     startTime: string;
-    duration: number;
+    endTime: string;
     type: 'domestic' | 'international' | 'charter';
     timeSlotIndex: number;
   }) => {
@@ -165,7 +165,7 @@ const CrewRoster = () => {
         type: eventData.type,
         startTime: eventData.startTime,
         endTime: eventData.endTime,
-        notes: eventData.notes,
+        notes: eventData.notes || '', // Ensure notes is never undefined
       };
 
       await crewService.addCrewEvent(newEvent);
@@ -185,6 +185,23 @@ const CrewRoster = () => {
     }
   };
 
+  const handleContextMenuAction = (crewMemberId: string, eventType: 'OFF' | 'RQF' | 'Office Duty' | 'Standby' | 'Leave') => {
+    // Create a default event for the current day
+    const now = new Date();
+    const startTime = new Date(now);
+    startTime.setHours(9, 0, 0, 0); // Default start at 9 AM
+    
+    const endTime = new Date(now);
+    endTime.setHours(17, 0, 0, 0); // Default end at 5 PM
+
+    handleAddCrewEvent(crewMemberId, {
+      type: eventType,
+      startTime,
+      endTime,
+      notes: `${eventType} scheduled`
+    });
+  };
+
   const getCrewAssignments = (crewMemberId: string) => {
     const flights = flightAssignments.filter(f => f.crewMemberId === crewMemberId);
     const events = crewEvents.filter(e => e.crewMemberId === crewMemberId);
@@ -201,6 +218,7 @@ const CrewRoster = () => {
           flightNumber: item.flightNumber,
           route: item.route,
           startTime: item.startTime,
+          endTime: item.endTime,
           duration: item.duration,
           flightType: item.type,
           position,
@@ -223,6 +241,23 @@ const CrewRoster = () => {
         };
       }
     });
+  };
+
+  const getEventColor = (eventType: string) => {
+    switch (eventType) {
+      case 'OFF':
+        return 'bg-red-500';
+      case 'RQF':
+        return 'bg-yellow-500';
+      case 'Office Duty':
+        return 'bg-gray-600';
+      case 'Standby':
+        return 'bg-orange-500';
+      case 'Leave':
+        return 'bg-pink-500';
+      default:
+        return 'bg-gray-500';
+    }
   };
 
   if (loading) {
@@ -271,12 +306,12 @@ const CrewRoster = () => {
       {crewMembers.map((member) => (
         <ContextMenuWrapper
           key={member.id}
-          onAddOff={() => {}}
-          onAddRQF={() => {}}
-          onAddEditNote={() => {}}
-          onAddOfficeDuty={() => {}}
-          onAddStandby={() => {}}
-          onLeaves={() => {}}
+          onAddOff={() => handleContextMenuAction(member.id, 'OFF')}
+          onAddRQF={() => handleContextMenuAction(member.id, 'RQF')}
+          onAddEditNote={() => {}} // Keep empty for now
+          onAddOfficeDuty={() => handleContextMenuAction(member.id, 'Office Duty')}
+          onAddStandby={() => handleContextMenuAction(member.id, 'Standby')}
+          onLeaves={() => handleContextMenuAction(member.id, 'Leave')}
         >
           <div 
             className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
@@ -322,7 +357,7 @@ const CrewRoster = () => {
             </div>
             <div className="flex relative">
               {timeline.map((slot, index) => (
-                <div key={slot.id} className="w-16 h-20 border-r border-gray-100 relative flex-shrink-0">
+                <div key={slot.id} className="w-10 h-24 border-r border-gray-100 relative flex-shrink-0">
                 </div>
               ))}
               {/* Render assignments with precise positioning */}
@@ -345,19 +380,37 @@ const CrewRoster = () => {
                         flightNumber={assignment.flightNumber!}
                         route={assignment.route!}
                         startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        duration={assignment.duration!}
+                        endTime={assignment.endTime!.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         type={assignment.flightType!}
                         onRemove={() => handleRemoveFlight(assignment.id)}
                       />
                     ) : (
                       <div 
-                        className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 flex flex-col justify-between"
+                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-20 flex flex-col justify-between`}
                         title={`${assignment.eventType} - ${assignment.notes || ''}`}
                       >
                         <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
                         <div className="text-xs opacity-75 leading-tight">
-                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {assignment.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Add delete functionality for events
+                            crewService.deleteCrewEvent(assignment.id).then(() => {
+                              loadData();
+                              toast({
+                                title: 'Event Removed',
+                                description: `${assignment.eventType} has been removed`,
+                              });
+                            }).catch((error) => {
+                              console.error('Error removing event:', error);
+                            });
+                          }}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                        >
+                          ×
+                        </button>
                       </div>
                     )}
                   </div>

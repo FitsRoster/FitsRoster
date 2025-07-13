@@ -184,12 +184,27 @@ class CrewService {
     try {
       console.log('Adding crew event:', event.type);
       const eventsCollection = collection(db, 'crewEvents');
-      const docRef = await addDoc(eventsCollection, {
-        ...event,
+      
+      // Filter out undefined values to prevent Firebase error
+      const eventData: any = {
+        crewMemberId: event.crewMemberId,
+        type: event.type,
         startTime: Timestamp.fromDate(event.startTime),
         endTime: Timestamp.fromDate(event.endTime),
         createdAt: Timestamp.now(),
-      });
+      };
+
+      // Only add notes if it's not undefined
+      if (event.notes !== undefined && event.notes !== '') {
+        eventData.notes = event.notes;
+      }
+
+      // Only add flightAssignmentId if it's not undefined
+      if (event.flightAssignmentId !== undefined) {
+        eventData.flightAssignmentId = event.flightAssignmentId;
+      }
+
+      const docRef = await addDoc(eventsCollection, eventData);
       console.log('Crew event added with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
