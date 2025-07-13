@@ -1,41 +1,8 @@
 
-const RosterHeader = () => {
-  // Generate timeline for next 7 days starting from today
-  const generateTimeline = () => {
-    const timeline = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
-      // Create time slots for each day (every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
-      for (let hour = 0; hour < 24; hour += 4) {
-        const timeSlot = new Date(date);
-        timeSlot.setHours(hour, 0, 0, 0);
-        
-        timeline.push({
-          id: `${i}-${hour}`,
-          time: timeSlot.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
-          }),
-          date: date.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric' 
-          }),
-          dayIndex: i,
-          hourIndex: hour,
-          slotIndex: i * 6 + (hour / 4) // Calculate global slot index
-        });
-      }
-    }
-    
-    return timeline;
-  };
+import { generateTimeSlots } from '../utils/timeSlotUtils';
 
-  const timeline = generateTimeline();
+const RosterHeader = () => {
+  const timeline = generateTimeSlots();
 
   return (
     <div className="bg-white border-b border-gray-200 sticky top-0 z-10">

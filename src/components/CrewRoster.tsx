@@ -6,6 +6,7 @@ import AddFlightDialog from './AddFlightDialog';
 import AddCrewEventDialog from './AddCrewEventDialog';
 import { useToast } from '@/hooks/use-toast';
 import { crewService, CrewMember, FlightAssignment as FlightAssignmentType, CrewEvent } from '../services/crewService';
+import { getTimeSlotIndex, getDurationInSlots } from '../utils/timeSlotUtils';
 
 const CrewRoster = () => {
   const { toast } = useToast();
@@ -20,7 +21,7 @@ const CrewRoster = () => {
   const totalTimeSlots = 42;
 
   // Helper function to calculate time slot index from date
-  const getTimeSlotIndex = (date: Date): number => {
+  const getTimeSlotIndexOriginal = (date: Date): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -32,7 +33,7 @@ const CrewRoster = () => {
   };
 
   // Helper function to calculate duration in slots
-  const getDurationInSlots = (startTime: Date, endTime: Date): number => {
+  const getDurationInSlotsOriginal = (startTime: Date, endTime: Date): number => {
     const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
     return Math.ceil(durationHours / 4); // Each slot is 4 hours
   };
