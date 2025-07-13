@@ -17,7 +17,7 @@ const Index = () => {
         </div>
         
         <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-          <ScrollArea className="w-full">
+          <ScrollArea className="w-full h-[calc(100vh-200px)]">
             <div className="min-w-max">
               <RosterHeader />
               <CrewRoster />
