@@ -24,7 +24,7 @@ interface AddFlightDialogProps {
     flightNumber: string;
     route: string;
     startTime: string;
-    duration: number;
+    endTime: string;
     type: 'domestic' | 'international' | 'charter';
     timeSlotIndex: number;
   }) => void;
@@ -41,34 +41,14 @@ const AddFlightDialog = ({ onAddFlight }: AddFlightDialogProps) => {
     timeSlotIndex: 0
   });
 
-  const calculateDuration = (start: string, end: string): number => {
-    if (!start || !end) return 1;
-    
-    const [startHours, startMinutes] = start.split(':').map(Number);
-    const [endHours, endMinutes] = end.split(':').map(Number);
-    
-    const startTotalMinutes = startHours * 60 + startMinutes;
-    const endTotalMinutes = endHours * 60 + endMinutes;
-    
-    let durationMinutes = endTotalMinutes - startTotalMinutes;
-    
-    // Handle next day scenarios
-    if (durationMinutes <= 0) {
-      durationMinutes += 24 * 60;
-    }
-    
-    return durationMinutes / 60; // Convert to hours
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const duration = calculateDuration(formData.startTime, formData.endTime);
     
     onAddFlight({
       flightNumber: formData.flightNumber,
       route: formData.route,
       startTime: formData.startTime,
-      duration,
+      endTime: formData.endTime,
       type: formData.type,
       timeSlotIndex: formData.timeSlotIndex
     });
