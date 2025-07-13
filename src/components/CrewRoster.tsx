@@ -360,7 +360,7 @@ const CrewRoster = () => {
                 </div>
               )}
             </div>
-            <div className="flex relative">
+            <div className="flex relative h-28">
               {timeline.map((slot, index) => (
                 <div key={slot.id} className="w-16 h-28 border-r border-gray-100 relative flex-shrink-0">
                 </div>
@@ -373,7 +373,7 @@ const CrewRoster = () => {
                 return (
                   <div
                     key={assignment.id}
-                    className="absolute top-2"
+                    className="absolute top-1/2 transform -translate-y-1/2"
                     style={{ 
                       left: `${leftOffset}px`,
                       width: `${Math.max(width, 64)}px`, // Minimum width matches slot width
@@ -391,13 +391,9 @@ const CrewRoster = () => {
                       />
                     ) : (
                       <div 
-                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-24 flex flex-col justify-between`}
+                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 w-full flex flex-col justify-between`}
                         title={`${assignment.eventType} - ${assignment.notes || ''}`}
                       >
-                        <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
-                        <div className="text-xs opacity-75 leading-tight">
-                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {assignment.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -416,6 +412,10 @@ const CrewRoster = () => {
                         >
                           ×
                         </button>
+                        <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
+                        <div className="text-xs opacity-90 truncate leading-tight">
+                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {assignment.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </div>
                     )}
                   </div>
