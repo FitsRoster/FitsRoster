@@ -26,7 +26,7 @@ const FlightAssignment = ({ flightNumber, route, startTime, duration, type, onRe
 
   return (
     <div 
-      className={`${getTypeColor()} text-white rounded-md p-1 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-12 w-full`}
+      className={`${getTypeColor()} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 w-full flex flex-col justify-between`}
       title={`${flightNumber} - ${route} (${duration}h)`}
     >
       {onRemove && (
@@ -40,9 +40,9 @@ const FlightAssignment = ({ flightNumber, route, startTime, duration, type, onRe
           <X className="h-3 w-3" />
         </button>
       )}
-      <div className="font-semibold text-xs">{flightNumber}</div>
-      <div className="text-xs opacity-90 truncate">{route}</div>
-      <div className="text-xs opacity-75">{startTime}</div>
+      <div className="font-semibold text-xs leading-tight">{flightNumber}</div>
+      <div className="text-xs opacity-90 truncate leading-tight">{route}</div>
+      <div className="text-xs opacity-75 leading-tight">{startTime}</div>
     </div>
   );
 };

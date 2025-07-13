@@ -36,20 +36,49 @@ const AddFlightDialog = ({ onAddFlight }: AddFlightDialogProps) => {
     flightNumber: '',
     route: '',
     startTime: '',
-    duration: 1,
+    endTime: '',
     type: 'domestic' as 'domestic' | 'international' | 'charter',
     timeSlotIndex: 0
   });
 
+  const calculateDuration = (start: string, end: string): number => {
+    if (!start || !end) return 1;
+    
+    const [startHours, startMinutes] = start.split(':').map(Number);
+    const [endHours, endMinutes] = end.split(':').map(Number);
+    
+    const startTotalMinutes = startHours * 60 + startMinutes;
+    const endTotalMinutes = endHours * 60 + endMinutes;
+    
+    let durationMinutes = endTotalMinutes - startTotalMinutes;
+    
+    // Handle next day scenarios
+    if (durationMinutes <= 0) {
+      durationMinutes += 24 * 60;
+    }
+    
+    return durationMinutes / 60; // Convert to hours
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddFlight(formData);
+    const duration = calculateDuration(formData.startTime, formData.endTime);
+    
+    onAddFlight({
+      flightNumber: formData.flightNumber,
+      route: formData.route,
+      startTime: formData.startTime,
+      duration,
+      type: formData.type,
+      timeSlotIndex: formData.timeSlotIndex
+    });
+    
     setOpen(false);
     setFormData({
       flightNumber: '',
       route: '',
       startTime: '',
-      duration: 1,
+      endTime: '',
       type: 'domestic',
       timeSlotIndex: 0
     });
@@ -102,14 +131,12 @@ const AddFlightDialog = ({ onAddFlight }: AddFlightDialogProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="duration">Duration (hours)</Label>
+            <Label htmlFor="endTime">End Time</Label>
             <Input
-              id="duration"
-              type="number"
-              min="1"
-              max="24"
-              value={formData.duration}
-              onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
+              id="endTime"
+              type="time"
+              value={formData.endTime}
+              onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
               required
             />
           </div>
@@ -134,7 +161,7 @@ const AddFlightDialog = ({ onAddFlight }: AddFlightDialogProps) => {
               id="timeSlot"
               type="number"
               min="0"
-              max="41"
+              max="167"
               value={formData.timeSlotIndex}
               onChange={(e) => setFormData({ ...formData, timeSlotIndex: parseInt(e.target.value) })}
               required

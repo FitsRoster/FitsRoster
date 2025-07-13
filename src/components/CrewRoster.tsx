@@ -322,7 +322,7 @@ const CrewRoster = () => {
             </div>
             <div className="flex relative">
               {timeline.map((slot, index) => (
-                <div key={slot.id} className="w-16 h-16 border-r border-gray-100 relative flex-shrink-0">
+                <div key={slot.id} className="w-16 h-20 border-r border-gray-100 relative flex-shrink-0">
                 </div>
               ))}
               {/* Render assignments with precise positioning */}
@@ -351,11 +351,11 @@ const CrewRoster = () => {
                       />
                     ) : (
                       <div 
-                        className="bg-gray-500 text-white rounded-md p-1 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-12"
+                        className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 flex flex-col justify-between"
                         title={`${assignment.eventType} - ${assignment.notes || ''}`}
                       >
-                        <div className="font-semibold text-xs">{assignment.eventType}</div>
-                        <div className="text-xs opacity-75">
+                        <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
+                        <div className="text-xs opacity-75 leading-tight">
                           {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
