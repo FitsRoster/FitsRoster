@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,15 +18,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { UserPlus, Users } from 'lucide-react';
+import { UserPlus, Users, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { crewService, CrewMember } from '../services/crewService';
+import { importCrewData } from '../utils/crewDataImport';
 
 const CrewManagement = () => {
   const { toast } = useToast();
   const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [newCrew, setNewCrew] = useState({
     name: '',
     role: 'Flight Attendant' as 'Captain' | 'First Officer' | 'Flight Attendant',
@@ -55,6 +56,33 @@ const CrewManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImportCrewData = async () => {
+    setImporting(true);
+    try {
+      const result = await importCrewData();
+      
+      toast({
+        title: 'Import Complete',
+        description: `Successfully imported ${result.successCount} crew members out of ${result.total}. ${result.errorCount} failed.`,
+      });
+
+      if (result.errors.length > 0) {
+        console.error('Import errors:', result.errors);
+      }
+
+      await loadCrewMembers(); // Reload the crew list
+    } catch (error) {
+      console.error('Error importing crew data:', error);
+      toast({
+        title: 'Import Failed',
+        description: 'Failed to import crew data',
+        variant: 'destructive',
+      });
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -136,100 +164,111 @@ const CrewManagement = () => {
               <Users className="h-5 w-5" />
               Crew Management ({crewMembers.length} members)
             </CardTitle>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Add Crew Member
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Crew Member</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAddCrew} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input
-                      id="name"
-                      value={newCrew.name}
-                      onChange={(e) => setNewCrew({ ...newCrew, name: e.target.value })}
-                      placeholder="Enter crew member name"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select value={newCrew.role} onValueChange={(value: 'Captain' | 'First Officer' | 'Flight Attendant') => setNewCrew({ ...newCrew, role: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Captain">Captain</SelectItem>
-                        <SelectItem value="First Officer">First Officer</SelectItem>
-                        <SelectItem value="Flight Attendant">Flight Attendant</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleImportCrewData}
+                disabled={importing}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? 'Importing...' : 'Import Crew Data'}
+              </Button>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4" />
+                    Add Crew Member
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Crew Member</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleAddCrew} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="flightHours">Total Flight Hours</Label>
+                      <Label htmlFor="name">Name</Label>
                       <Input
-                        id="flightHours"
-                        type="number"
-                        min="0"
-                        value={newCrew.totalFlightHours}
-                        onChange={(e) => setNewCrew({ ...newCrew, totalFlightHours: parseInt(e.target.value) || 0 })}
+                        id="name"
+                        value={newCrew.name}
+                        onChange={(e) => setNewCrew({ ...newCrew, name: e.target.value })}
+                        placeholder="Enter crew member name"
+                        required
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="dutyHours">Total Duty Hours</Label>
+                      <Label htmlFor="role">Role</Label>
+                      <Select value={newCrew.role} onValueChange={(value: 'Captain' | 'First Officer' | 'Flight Attendant') => setNewCrew({ ...newCrew, role: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Captain">Captain</SelectItem>
+                          <SelectItem value="First Officer">First Officer</SelectItem>
+                          <SelectItem value="Flight Attendant">Flight Attendant</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="flightHours">Total Flight Hours</Label>
+                        <Input
+                          id="flightHours"
+                          type="number"
+                          min="0"
+                          value={newCrew.totalFlightHours}
+                          onChange={(e) => setNewCrew({ ...newCrew, totalFlightHours: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="dutyHours">Total Duty Hours</Label>
+                        <Input
+                          id="dutyHours"
+                          type="number"
+                          min="0"
+                          value={newCrew.totalDutyHours}
+                          onChange={(e) => setNewCrew({ ...newCrew, totalDutyHours: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="restHours">Rest Hours</Label>
                       <Input
-                        id="dutyHours"
+                        id="restHours"
                         type="number"
                         min="0"
-                        value={newCrew.totalDutyHours}
-                        onChange={(e) => setNewCrew({ ...newCrew, totalDutyHours: parseInt(e.target.value) || 0 })}
+                        max="24"
+                        value={newCrew.restHours}
+                        onChange={(e) => setNewCrew({ ...newCrew, restHours: parseInt(e.target.value) || 12 })}
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="restHours">Rest Hours</Label>
-                    <Input
-                      id="restHours"
-                      type="number"
-                      min="0"
-                      max="24"
-                      value={newCrew.restHours}
-                      onChange={(e) => setNewCrew({ ...newCrew, restHours: parseInt(e.target.value) || 12 })}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="certifications">Certifications (comma-separated)</Label>
+                      <Input
+                        id="certifications"
+                        value={newCrew.certifications.join(', ')}
+                        onChange={(e) => handleCertificationChange(e.target.value)}
+                        placeholder="e.g., A320, A330, Safety, Service"
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="certifications">Certifications (comma-separated)</Label>
-                    <Input
-                      id="certifications"
-                      value={newCrew.certifications.join(', ')}
-                      onChange={(e) => handleCertificationChange(e.target.value)}
-                      placeholder="e.g., A320, A330, Safety, Service"
-                    />
-                  </div>
-
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={loading}>
-                      {loading ? 'Adding...' : 'Add Crew Member'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div className="flex justify-end space-x-2">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={loading}>
+                        {loading ? 'Adding...' : 'Add Crew Member'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
