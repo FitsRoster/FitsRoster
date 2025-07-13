@@ -24,13 +24,9 @@ const FlightAssignment = ({ flightNumber, route, startTime, duration, type, onRe
     }
   };
 
-  // Calculate width based on duration (each time slot is 4 hours, so we need to scale accordingly)
-  const width = `${(duration / 4) * 128}px`; // 128px is the width of each time slot
-
   return (
     <div 
-      className={`${getTypeColor()} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group`}
-      style={{ width, minWidth: '80px' }}
+      className={`${getTypeColor()} text-white rounded-md p-1 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-12 w-full`}
       title={`${flightNumber} - ${route} (${duration}h)`}
     >
       {onRemove && (
@@ -39,13 +35,13 @@ const FlightAssignment = ({ flightNumber, route, startTime, duration, type, onRe
             e.stopPropagation();
             onRemove();
           }}
-          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
         >
           <X className="h-3 w-3" />
         </button>
       )}
-      <div className="font-semibold">{flightNumber}</div>
-      <div className="text-xs opacity-90">{route}</div>
+      <div className="font-semibold text-xs">{flightNumber}</div>
+      <div className="text-xs opacity-90 truncate">{route}</div>
       <div className="text-xs opacity-75">{startTime}</div>
     </div>
   );

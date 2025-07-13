@@ -6,7 +6,7 @@ import AddFlightDialog from './AddFlightDialog';
 import AddCrewEventDialog from './AddCrewEventDialog';
 import { useToast } from '@/hooks/use-toast';
 import { crewService, CrewMember, FlightAssignment as FlightAssignmentType, CrewEvent } from '../services/crewService';
-import { generateTimeSlots, getTimeSlotIndex, getDurationInSlots } from '../utils/timeSlotUtils';
+import { generateTimeSlots, getTimeSlotPosition, getDurationInSlots } from '../utils/timeSlotUtils';
 
 const CrewRoster = () => {
   const { toast } = useToast();
@@ -20,6 +20,7 @@ const CrewRoster = () => {
   // Generate the same timeline as the header
   const timeline = generateTimeSlots();
   const totalTimeSlots = timeline.length;
+  const SLOT_WIDTH = 64; // 16 * 4 (w-16 = 64px)
 
   useEffect(() => {
     loadData();
@@ -191,8 +192,8 @@ const CrewRoster = () => {
     return [...flights, ...events].map(item => {
       if ('flightNumber' in item) {
         // It's a flight
-        const timeSlotIndex = getTimeSlotIndex(item.startTime);
-        const durationInSlots = getDurationInSlots(item.startTime, item.endTime);
+        const position = getTimeSlotPosition(item.startTime);
+        const durationInHours = getDurationInSlots(item.startTime, item.endTime);
         
         return {
           id: item.id,
@@ -202,13 +203,13 @@ const CrewRoster = () => {
           startTime: item.startTime,
           duration: item.duration,
           flightType: item.type,
-          timeSlotIndex,
-          durationInSlots,
+          position,
+          durationInHours,
         };
       } else {
         // It's a crew event
-        const timeSlotIndex = getTimeSlotIndex(item.startTime);
-        const durationInSlots = getDurationInSlots(item.startTime, item.endTime);
+        const position = getTimeSlotPosition(item.startTime);
+        const durationInHours = getDurationInSlots(item.startTime, item.endTime);
         
         return {
           id: item.id,
@@ -217,8 +218,8 @@ const CrewRoster = () => {
           startTime: item.startTime,
           endTime: item.endTime,
           notes: item.notes,
-          timeSlotIndex,
-          durationInSlots,
+          position,
+          durationInHours,
         };
       }
     });
@@ -319,44 +320,46 @@ const CrewRoster = () => {
                 </div>
               )}
             </div>
-            <div className="flex">
-              {timeline.map((slot, index) => {
-                const assignments = getCrewAssignments(member.id)
-                  .filter(assignment => assignment.timeSlotIndex === index);
+            <div className="flex relative">
+              {timeline.map((slot, index) => (
+                <div key={slot.id} className="w-16 h-16 border-r border-gray-100 relative flex-shrink-0">
+                </div>
+              ))}
+              {/* Render assignments with precise positioning */}
+              {getCrewAssignments(member.id).map((assignment) => {
+                const leftOffset = assignment.position.slotIndex * SLOT_WIDTH + (assignment.position.offsetPercent / 100) * SLOT_WIDTH;
+                const width = assignment.durationInHours * SLOT_WIDTH;
                 
                 return (
-                  <div key={slot.id} className="w-32 h-16 border-r border-gray-100 relative flex-shrink-0">
-                    {assignments.map((assignment) => (
-                      <div
-                        key={assignment.id}
-                        className="absolute top-2 left-1"
-                        style={{ 
-                          zIndex: 1,
-                          width: `${Math.min(assignment.durationInSlots * 128 - 8, (totalTimeSlots - index) * 128 - 8)}px`
-                        }}
+                  <div
+                    key={assignment.id}
+                    className="absolute top-2"
+                    style={{ 
+                      left: `${leftOffset}px`,
+                      width: `${Math.max(width, 40)}px`, // Minimum width for visibility
+                      zIndex: 1
+                    }}
+                  >
+                    {assignment.type === 'flight' ? (
+                      <FlightAssignment
+                        flightNumber={assignment.flightNumber!}
+                        route={assignment.route!}
+                        startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        duration={assignment.duration!}
+                        type={assignment.flightType!}
+                        onRemove={() => handleRemoveFlight(assignment.id)}
+                      />
+                    ) : (
+                      <div 
+                        className="bg-gray-500 text-white rounded-md p-1 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-12"
+                        title={`${assignment.eventType} - ${assignment.notes || ''}`}
                       >
-                        {assignment.type === 'flight' ? (
-                          <FlightAssignment
-                            flightNumber={assignment.flightNumber!}
-                            route={assignment.route!}
-                            startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            duration={assignment.duration!}
-                            type={assignment.flightType!}
-                            onRemove={() => handleRemoveFlight(assignment.id)}
-                          />
-                        ) : (
-                          <div 
-                            className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
-                            title={`${assignment.eventType} - ${assignment.notes || ''}`}
-                          >
-                            <div className="font-semibold">{assignment.eventType}</div>
-                            <div className="text-xs opacity-75">
-                              {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          </div>
-                        )}
+                        <div className="font-semibold text-xs">{assignment.eventType}</div>
+                        <div className="text-xs opacity-75">
+                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })}

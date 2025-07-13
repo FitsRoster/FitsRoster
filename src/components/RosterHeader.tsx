@@ -12,9 +12,9 @@ const RosterHeader = () => {
         </div>
         <div className="flex">
           {timeline.map((slot) => (
-            <div key={slot.id} className="w-32 p-2 border-r border-gray-100 text-center flex-shrink-0">
+            <div key={slot.id} className="w-16 p-1 border-r border-gray-100 text-center flex-shrink-0">
               <div className="text-xs font-medium text-gray-600">{slot.date}</div>
-              <div className="text-sm text-gray-900">{slot.time}</div>
+              <div className="text-xs text-gray-900">{slot.time}</div>
             </div>
           ))}
         </div>
