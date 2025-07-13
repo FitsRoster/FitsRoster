@@ -6,7 +6,7 @@ import AddFlightDialog from './AddFlightDialog';
 import AddCrewEventDialog from './AddCrewEventDialog';
 import { useToast } from '@/hooks/use-toast';
 import { crewService, CrewMember, FlightAssignment as FlightAssignmentType, CrewEvent } from '../services/crewService';
-import { getTimeSlotIndex, getDurationInSlots } from '../utils/timeSlotUtils';
+import { generateTimeSlots, getTimeSlotIndex, getDurationInSlots } from '../utils/timeSlotUtils';
 
 const CrewRoster = () => {
   const { toast } = useToast();
@@ -17,26 +17,9 @@ const CrewRoster = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Generate 42 time slots (7 days * 6 slots per day)
-  const totalTimeSlots = 42;
-
-  // Helper function to calculate time slot index from date
-  const getTimeSlotIndexOriginal = (date: Date): number => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const daysDiff = Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const hours = date.getHours();
-    const slotInDay = Math.floor(hours / 4); // 0-5 (6 slots per day)
-    
-    return daysDiff * 6 + slotInDay;
-  };
-
-  // Helper function to calculate duration in slots
-  const getDurationInSlotsOriginal = (startTime: Date, endTime: Date): number => {
-    const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-    return Math.ceil(durationHours / 4); // Each slot is 4 hours
-  };
+  // Generate the same timeline as the header
+  const timeline = generateTimeSlots();
+  const totalTimeSlots = timeline.length;
 
   useEffect(() => {
     loadData();
@@ -109,16 +92,15 @@ const CrewRoster = () => {
     timeSlotIndex: number;
   }) => {
     try {
-      const startTime = new Date();
+      // Use the timeline to calculate the actual date/time
+      const timeSlot = timeline[flightData.timeSlotIndex];
+      if (!timeSlot) {
+        throw new Error('Invalid time slot index');
+      }
+
+      const startTime = new Date(timeSlot.dateTime);
       const [hours, minutes] = flightData.startTime.split(':').map(Number);
-      
-      // Calculate the actual date based on time slot index
-      const dayIndex = Math.floor(flightData.timeSlotIndex / 6);
-      const slotInDay = flightData.timeSlotIndex % 6;
-      const hourInDay = slotInDay * 4;
-      
-      startTime.setDate(startTime.getDate() + dayIndex);
-      startTime.setHours(hourInDay + hours, minutes, 0, 0);
+      startTime.setHours(startTime.getHours() + hours, minutes, 0, 0);
       
       const endTime = new Date(startTime);
       endTime.setHours(endTime.getHours() + flightData.duration);
@@ -209,6 +191,9 @@ const CrewRoster = () => {
     return [...flights, ...events].map(item => {
       if ('flightNumber' in item) {
         // It's a flight
+        const timeSlotIndex = getTimeSlotIndex(item.startTime);
+        const durationInSlots = getDurationInSlots(item.startTime, item.endTime);
+        
         return {
           id: item.id,
           type: 'flight' as const,
@@ -217,11 +202,14 @@ const CrewRoster = () => {
           startTime: item.startTime,
           duration: item.duration,
           flightType: item.type,
-          timeSlotIndex: getTimeSlotIndex(item.startTime),
-          durationInSlots: getDurationInSlots(item.startTime, item.endTime),
+          timeSlotIndex,
+          durationInSlots,
         };
       } else {
         // It's a crew event
+        const timeSlotIndex = getTimeSlotIndex(item.startTime);
+        const durationInSlots = getDurationInSlots(item.startTime, item.endTime);
+        
         return {
           id: item.id,
           type: 'event' as const,
@@ -229,8 +217,8 @@ const CrewRoster = () => {
           startTime: item.startTime,
           endTime: item.endTime,
           notes: item.notes,
-          timeSlotIndex: getTimeSlotIndex(item.startTime),
-          durationInSlots: getDurationInSlots(item.startTime, item.endTime),
+          timeSlotIndex,
+          durationInSlots,
         };
       }
     });
@@ -331,19 +319,21 @@ const CrewRoster = () => {
                 </div>
               )}
             </div>
-            <div className="flex-1 relative">
+            <div className="flex-1 relative overflow-x-auto">
               <div className="flex min-w-max">
-                {Array.from({ length: totalTimeSlots }, (_, index) => (
-                  <div key={index} className="w-32 h-16 border-r border-gray-100 relative">
-                    {getCrewAssignments(member.id)
-                      .filter(assignment => assignment.timeSlotIndex === index)
-                      .map((assignment) => (
+                {timeline.map((slot, index) => {
+                  const assignments = getCrewAssignments(member.id)
+                    .filter(assignment => assignment.timeSlotIndex === index);
+                  
+                  return (
+                    <div key={slot.id} className="w-32 h-16 border-r border-gray-100 relative flex-shrink-0">
+                      {assignments.map((assignment) => (
                         <div
                           key={assignment.id}
                           className="absolute top-2 left-1"
                           style={{ 
                             zIndex: 1,
-                            width: `${assignment.durationInSlots * 128 - 8}px` // Span multiple slots
+                            width: `${Math.min(assignment.durationInSlots * 128 - 8, (totalTimeSlots - index) * 128 - 8)}px`
                           }}
                         >
                           {assignment.type === 'flight' ? (
@@ -368,8 +358,9 @@ const CrewRoster = () => {
                           )}
                         </div>
                       ))}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
