@@ -2,6 +2,7 @@
 import RosterHeader from '../components/RosterHeader';
 import CrewRoster from '../components/CrewRoster';
 import LogoutButton from '../components/LogoutButton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const Index = () => {
   return (
@@ -16,8 +17,12 @@ const Index = () => {
         </div>
         
         <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-          <RosterHeader />
-          <CrewRoster />
+          <ScrollArea className="w-full">
+            <div className="min-w-max">
+              <RosterHeader />
+              <CrewRoster />
+            </div>
+          </ScrollArea>
         </div>
       </div>
     </div>

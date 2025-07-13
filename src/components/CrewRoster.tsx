@@ -281,7 +281,7 @@ const CrewRoster = () => {
             className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
             onClick={() => setSelectedCrewMember(member.id)}
           >
-            <div className="w-64 p-4 border-r border-gray-200">
+            <div className="w-64 p-4 border-r border-gray-200 flex-shrink-0">
               <div className="font-medium text-gray-900">{member.name}</div>
               <div className="text-sm text-gray-500">{member.role}</div>
               <div className="text-xs text-gray-400 mt-1">
@@ -319,49 +319,47 @@ const CrewRoster = () => {
                 </div>
               )}
             </div>
-            <div className="flex-1 relative overflow-x-auto">
-              <div className="flex min-w-max">
-                {timeline.map((slot, index) => {
-                  const assignments = getCrewAssignments(member.id)
-                    .filter(assignment => assignment.timeSlotIndex === index);
-                  
-                  return (
-                    <div key={slot.id} className="w-32 h-16 border-r border-gray-100 relative flex-shrink-0">
-                      {assignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="absolute top-2 left-1"
-                          style={{ 
-                            zIndex: 1,
-                            width: `${Math.min(assignment.durationInSlots * 128 - 8, (totalTimeSlots - index) * 128 - 8)}px`
-                          }}
-                        >
-                          {assignment.type === 'flight' ? (
-                            <FlightAssignment
-                              flightNumber={assignment.flightNumber!}
-                              route={assignment.route!}
-                              startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              duration={assignment.duration!}
-                              type={assignment.flightType!}
-                              onRemove={() => handleRemoveFlight(assignment.id)}
-                            />
-                          ) : (
-                            <div 
-                              className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
-                              title={`${assignment.eventType} - ${assignment.notes || ''}`}
-                            >
-                              <div className="font-semibold">{assignment.eventType}</div>
-                              <div className="text-xs opacity-75">
-                                {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </div>
+            <div className="flex">
+              {timeline.map((slot, index) => {
+                const assignments = getCrewAssignments(member.id)
+                  .filter(assignment => assignment.timeSlotIndex === index);
+                
+                return (
+                  <div key={slot.id} className="w-32 h-16 border-r border-gray-100 relative flex-shrink-0">
+                    {assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="absolute top-2 left-1"
+                        style={{ 
+                          zIndex: 1,
+                          width: `${Math.min(assignment.durationInSlots * 128 - 8, (totalTimeSlots - index) * 128 - 8)}px`
+                        }}
+                      >
+                        {assignment.type === 'flight' ? (
+                          <FlightAssignment
+                            flightNumber={assignment.flightNumber!}
+                            route={assignment.route!}
+                            startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            duration={assignment.duration!}
+                            type={assignment.flightType!}
+                            onRemove={() => handleRemoveFlight(assignment.id)}
+                          />
+                        ) : (
+                          <div 
+                            className="bg-gray-500 text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+                            title={`${assignment.eventType} - ${assignment.notes || ''}`}
+                          >
+                            <div className="font-semibold">{assignment.eventType}</div>
+                            <div className="text-xs opacity-75">
+                              {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </ContextMenuWrapper>
