@@ -1,30 +1,42 @@
-
-import RosterHeader from '../components/RosterHeader';
-import CrewRoster from '../components/CrewRoster';
-import LogoutButton from '../components/LogoutButton';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RosterHeader from "../components/RosterHeader";
+import CrewRoster from "../components/CrewRoster";
+import AutoRosterGenerator from "../components/AutoRosterGenerator";
+import CrewManagement from "../components/CrewManagement";
+import LogoutButton from "../components/LogoutButton";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto">
-        <div className="mb-6 pt-6 flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Flight Crew Roster</h1>
-            <p className="text-muted-foreground">Manage flight assignments and crew schedules</p>
-          </div>
-          <LogoutButton />
-        </div>
-        
-        <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-          <ScrollArea className="w-full h-[calc(100vh-200px)]">
-            <div className="min-w-max">
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow-sm border-b p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Airline Crew Roster</h1>
+        <LogoutButton />
+      </div>
+      
+      <div className="container mx-auto p-4">
+        <Tabs defaultValue="roster" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="roster">Current Roster</TabsTrigger>
+            <TabsTrigger value="auto-roster">Auto Roster Generator</TabsTrigger>
+            <TabsTrigger value="crew-management">Crew Management</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="roster" className="space-y-4">
+            <div className="bg-white rounded-lg shadow">
               <RosterHeader />
               <CrewRoster />
             </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        </div>
+          </TabsContent>
+          
+          <TabsContent value="auto-roster">
+            <AutoRosterGenerator />
+          </TabsContent>
+          
+          <TabsContent value="crew-management">
+            <CrewManagement />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
