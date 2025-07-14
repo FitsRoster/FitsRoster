@@ -298,7 +298,7 @@ const CrewRoster = () => {
   }
 
   return (
-    <div className="bg-white">
+    <div className="bg-white overflow-x-auto">
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h3 className="text-lg font-medium">Crew Assignments ({crewMembers.length} members)</h3>
         {selectedCrewMember && (
@@ -308,123 +308,131 @@ const CrewRoster = () => {
         )}
       </div>
       
-      {crewMembers.map((member) => (
-        <ContextMenuWrapper
-          key={member.id}
-          onAddOff={() => handleContextMenuAction(member.id, 'OFF')}
-          onAddRQF={() => handleContextMenuAction(member.id, 'RQF')}
-          onAddEditNote={() => {}} // Keep empty for now
-          onAddOfficeDuty={() => handleContextMenuAction(member.id, 'Office Duty')}
-          onAddStandby={() => handleContextMenuAction(member.id, 'Standby')}
-          onLeaves={() => handleContextMenuAction(member.id, 'Leave')}
-        >
-          <div 
-            className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-            onClick={() => setSelectedCrewMember(member.id)}
+      <div className="min-w-max">
+        {crewMembers.map((member) => (
+          <ContextMenuWrapper
+            key={member.id}
+            onAddOff={() => handleContextMenuAction(member.id, 'OFF')}
+            onAddRQF={() => handleContextMenuAction(member.id, 'RQF')}
+            onAddEditNote={() => {}} // Keep empty for now
+            onAddOfficeDuty={() => handleContextMenuAction(member.id, 'Office Duty')}
+            onAddStandby={() => handleContextMenuAction(member.id, 'Standby')}
+            onLeaves={() => handleContextMenuAction(member.id, 'Leave')}
           >
-            <div className="w-64 p-4 border-r border-gray-200 flex-shrink-0">
-              <div className="font-medium text-gray-900">{member.name}</div>
-              <div className="text-sm text-gray-500">{member.role}</div>
-              <div className="text-xs text-gray-400 mt-1">
-                Flight Hours: {member.totalFlightHours} | Duty Hours: {member.totalDutyHours}
-              </div>
-              {selectedCrewMember === member.id && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <AddFlightDialog
-                    onAddFlight={(flightData) => handleAddFlight(member.id, flightData)}
-                  />
-                  <AddCrewEventDialog
-                    crewMemberId={member.id}
-                    crewMemberName={member.name}
-                    eventType="OFF"
-                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
-                  >
-                    <Button variant="outline" size="sm">OFF</Button>
-                  </AddCrewEventDialog>
-                  <AddCrewEventDialog
-                    crewMemberId={member.id}
-                    crewMemberName={member.name}
-                    eventType="RQF"
-                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
-                  >
-                    <Button variant="outline" size="sm">RQF</Button>
-                  </AddCrewEventDialog>
-                  <AddCrewEventDialog
-                    crewMemberId={member.id}
-                    crewMemberName={member.name}
-                    eventType="Office Duty"
-                    onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
-                  >
-                    <Button variant="outline" size="sm">Office</Button>
-                  </AddCrewEventDialog>
+            <div 
+              className="flex border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+              onClick={() => setSelectedCrewMember(member.id)}
+            >
+              <div className="w-64 p-4 border-r border-gray-200 flex-shrink-0">
+                <div className="font-medium text-gray-900">{member.name}</div>
+                <div className="text-sm text-gray-500">{member.role}</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  Flight Hours: {member.totalFlightHours} | Duty Hours: {member.totalDutyHours}
                 </div>
-              )}
-            </div>
-            <div className="flex relative h-28">
-              {timeline.map((slot, index) => (
-                <div key={slot.id} className="w-16 h-28 border-r border-gray-100 relative flex-shrink-0">
-                </div>
-              ))}
-              {/* Render assignments with precise positioning */}
-              {getCrewAssignments(member.id).map((assignment) => {
-                const leftOffset = assignment.position.slotIndex * SLOT_WIDTH + (assignment.position.offsetPercent / 100) * SLOT_WIDTH;
-                const width = assignment.durationInHours * SLOT_WIDTH;
-                
-                return (
-                  <div
-                    key={assignment.id}
-                    className="absolute top-1/2 transform -translate-y-1/2"
-                    style={{ 
-                      left: `${leftOffset}px`,
-                      width: `${Math.max(width, 64)}px`, // Minimum width matches slot width
-                      zIndex: 1
-                    }}
-                  >
-                    {assignment.type === 'flight' ? (
-                      <FlightAssignment
-                        flightNumber={assignment.flightNumber!}
-                        route={assignment.route!}
-                        startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        duration={assignment.durationInHours}
-                        type={assignment.flightType!}
-                        onRemove={() => handleRemoveFlight(assignment.id)}
-                      />
-                    ) : (
-                      <div 
-                        className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 w-full flex flex-col justify-between`}
-                        title={`${assignment.eventType} - ${assignment.notes || ''}`}
-                      >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Add delete functionality for events
-                            crewService.deleteCrewEvent(assignment.id).then(() => {
-                              loadData();
-                              toast({
-                                title: 'Event Removed',
-                                description: `${assignment.eventType} has been removed`,
-                              });
-                            }).catch((error) => {
-                              console.error('Error removing event:', error);
-                            });
-                          }}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
-                        >
-                          ×
-                        </button>
-                        <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
-                        <div className="text-xs opacity-90 truncate leading-tight">
-                          {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {assignment.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    )}
+                {selectedCrewMember === member.id && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <AddFlightDialog
+                      onAddFlight={(flightData) => handleAddFlight(member.id, flightData)}
+                    />
+                    <AddCrewEventDialog
+                      crewMemberId={member.id}
+                      crewMemberName={member.name}
+                      eventType="OFF"
+                      onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                    >
+                      <Button variant="outline" size="sm">OFF</Button>
+                    </AddCrewEventDialog>
+                    <AddCrewEventDialog
+                      crewMemberId={member.id}
+                      crewMemberName={member.name}
+                      eventType="RQF"
+                      onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                    >
+                      <Button variant="outline" size="sm">RQF</Button>
+                    </AddCrewEventDialog>
+                    <AddCrewEventDialog
+                      crewMemberId={member.id}
+                      crewMemberName={member.name}
+                      eventType="Office Duty"
+                      onAddEvent={(eventData) => handleAddCrewEvent(member.id, eventData)}
+                    >
+                      <Button variant="outline" size="sm">Office</Button>
+                    </AddCrewEventDialog>
                   </div>
-                );
-              })}
+                )}
+              </div>
+              <div 
+                className="flex relative h-28"
+                style={{ 
+                  width: `${totalTimeSlots * SLOT_WIDTH}px`,
+                  minWidth: `${totalTimeSlots * SLOT_WIDTH}px`
+                }}
+              >
+                {timeline.map((slot, index) => (
+                  <div key={slot.id} className="w-16 h-28 border-r border-gray-100 relative flex-shrink-0">
+                  </div>
+                ))}
+                {/* Render assignments with precise positioning */}
+                {getCrewAssignments(member.id).map((assignment) => {
+                  const leftOffset = assignment.position.slotIndex * SLOT_WIDTH + (assignment.position.offsetPercent / 100) * SLOT_WIDTH;
+                  const width = assignment.durationInHours * SLOT_WIDTH;
+                  
+                  return (
+                    <div
+                      key={assignment.id}
+                      className="absolute top-1/2 transform -translate-y-1/2"
+                      style={{ 
+                        left: `${leftOffset}px`,
+                        width: `${Math.max(width, 64)}px`, // Minimum width matches slot width
+                        zIndex: 1
+                      }}
+                    >
+                      {assignment.type === 'flight' ? (
+                        <FlightAssignment
+                          flightNumber={assignment.flightNumber!}
+                          route={assignment.route!}
+                          startTime={assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          duration={assignment.durationInHours}
+                          type={assignment.flightType!}
+                          onRemove={() => handleRemoveFlight(assignment.id)}
+                        />
+                      ) : (
+                        <div 
+                          className={`${getEventColor(assignment.eventType!)} text-white rounded-md p-2 text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group h-16 w-full flex flex-col justify-between`}
+                          title={`${assignment.eventType} - ${assignment.notes || ''}`}
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Add delete functionality for events
+                              crewService.deleteCrewEvent(assignment.id).then(() => {
+                                loadData();
+                                toast({
+                                  title: 'Event Removed',
+                                  description: `${assignment.eventType} has been removed`,
+                                });
+                              }).catch((error) => {
+                                console.error('Error removing event:', error);
+                              });
+                            }}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          >
+                            ×
+                          </button>
+                          <div className="font-semibold text-xs leading-tight">{assignment.eventType}</div>
+                          <div className="text-xs opacity-90 truncate leading-tight">
+                            {assignment.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {assignment.endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </ContextMenuWrapper>
-      ))}
+          </ContextMenuWrapper>
+        ))}
+      </div>
     </div>
   );
 };
