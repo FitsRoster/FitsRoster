@@ -297,15 +297,155 @@ const CrewRoster = () => {
     );
   }
 
+  const exportRosterAsJSON = () => {
+    const rosterData = {
+      exportDate: new Date().toISOString(),
+      crewMembers: crewMembers.map(member => ({
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        totalFlightHours: member.totalFlightHours,
+        totalDutyHours: member.totalDutyHours,
+        certifications: member.certifications
+      })),
+      flightAssignments: flightAssignments.map(flight => ({
+        id: flight.id,
+        crewMemberId: flight.crewMemberId,
+        flightNumber: flight.flightNumber,
+        route: flight.route,
+        startTime: flight.startTime.toISOString(),
+        endTime: flight.endTime.toISOString(),
+        duration: flight.duration,
+        type: flight.type,
+        status: flight.status
+      })),
+      crewEvents: crewEvents.map(event => ({
+        id: event.id,
+        crewMemberId: event.crewMemberId,
+        type: event.type,
+        startTime: event.startTime.toISOString(),
+        endTime: event.endTime.toISOString(),
+        notes: event.notes
+      }))
+    };
+
+    const dataStr = JSON.stringify(rosterData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `roster_export_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Roster Exported',
+      description: 'Roster data saved as JSON file',
+    });
+  };
+
+  const handleJSONImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        await importRosterFromJSON(jsonData);
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        toast({
+          title: 'Import Error',
+          description: 'Invalid JSON file format',
+          variant: 'destructive',
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const importRosterFromJSON = async (rosterData: any) => {
+    try {
+      let importedFlights = 0;
+      let importedEvents = 0;
+
+      // Import flight assignments
+      if (rosterData.flightAssignments) {
+        for (const flight of rosterData.flightAssignments) {
+          await crewService.addFlightAssignment({
+            crewMemberId: flight.crewMemberId,
+            flightNumber: flight.flightNumber,
+            route: flight.route,
+            startTime: new Date(flight.startTime),
+            endTime: new Date(flight.endTime),
+            duration: flight.duration,
+            type: flight.type,
+            status: flight.status || 'scheduled'
+          });
+          importedFlights++;
+        }
+      }
+
+      // Import crew events
+      if (rosterData.crewEvents) {
+        for (const event of rosterData.crewEvents) {
+          await crewService.addCrewEvent({
+            crewMemberId: event.crewMemberId,
+            type: event.type,
+            startTime: new Date(event.startTime),
+            endTime: new Date(event.endTime),
+            notes: event.notes || ''
+          });
+          importedEvents++;
+        }
+      }
+
+      await loadData(); // Reload to show imported data
+
+      toast({
+        title: 'Import Successful',
+        description: `Imported ${importedFlights} flights and ${importedEvents} events`,
+      });
+    } catch (error) {
+      console.error('Error importing roster:', error);
+      toast({
+        title: 'Import Error',
+        description: 'Failed to import roster data',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="bg-white overflow-x-auto">
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h3 className="text-lg font-medium">Crew Assignments ({crewMembers.length} members)</h3>
-        {selectedCrewMember && (
-          <AddFlightDialog
-            onAddFlight={(flightData) => handleAddFlight(selectedCrewMember, flightData)}
-          />
-        )}
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={exportRosterAsJSON}
+          >
+            Export JSON
+          </Button>
+          <label>
+            <Button variant="outline" size="sm" asChild>
+              <span>Import JSON</span>
+            </Button>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleJSONImport}
+              className="hidden"
+            />
+          </label>
+          {selectedCrewMember && (
+            <AddFlightDialog
+              onAddFlight={(flightData) => handleAddFlight(selectedCrewMember, flightData)}
+            />
+          )}
+        </div>
       </div>
       
       <div className="min-w-max">

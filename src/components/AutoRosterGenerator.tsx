@@ -99,6 +99,88 @@ const AutoRosterGenerator = () => {
     }
   };
 
+  const handleJSONUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        await processUploadedJSON(jsonData);
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        toast({
+          title: 'Upload Error',
+          description: 'Invalid JSON file format',
+          variant: 'destructive',
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const processUploadedJSON = async (rosterData: any) => {
+    try {
+      setIsGenerating(true);
+      
+      // Convert uploaded JSON to our format
+      const assignments: RosterAssignment[] = [];
+      
+      // Process flight assignments
+      if (rosterData.flightAssignments) {
+        for (const flight of rosterData.flightAssignments) {
+          assignments.push({
+            crewMemberId: flight.crewMemberId,
+            eventType: 'flight',
+            startTime: new Date(flight.startTime),
+            endTime: new Date(flight.endTime),
+            flightNumber: flight.flightNumber,
+            position: flight.position || 'Captain'
+          });
+        }
+      }
+      
+      // Process crew events
+      if (rosterData.crewEvents) {
+        for (const event of rosterData.crewEvents) {
+          const eventTypeMap: Record<string, 'off' | 'office_duty' | 'standby'> = {
+            'OFF': 'off',
+            'Office Duty': 'office_duty',
+            'Standby': 'standby',
+            'Leave': 'off'
+          };
+          
+          assignments.push({
+            crewMemberId: event.crewMemberId,
+            eventType: eventTypeMap[event.type] || 'off',
+            startTime: new Date(event.startTime),
+            endTime: new Date(event.endTime)
+          });
+        }
+      }
+
+      setGeneratedRoster({
+        assignments,
+        violations: rosterData.violations || []
+      });
+
+      toast({
+        title: 'JSON Loaded Successfully',
+        description: `Loaded ${assignments.length} assignments from Python-generated roster`,
+      });
+    } catch (error) {
+      console.error('Error processing JSON:', error);
+      toast({
+        title: 'Processing Error',
+        description: 'Failed to process uploaded JSON file',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleApplyRoster = async () => {
     if (!generatedRoster) return;
 
@@ -207,14 +289,24 @@ const AutoRosterGenerator = () => {
           </div>
 
           <div className="flex gap-2">
-            <Button 
-              onClick={handleGenerateRoster} 
-              disabled={isGenerating || !startDate || !endDate}
-              className="flex items-center gap-2"
-            >
-              <Calendar className="h-4 w-4" />
-              {isGenerating ? 'Generating...' : 'Generate Smart Roster'}
-            </Button>
+            <label>
+              <Button 
+                disabled={isGenerating || !startDate || !endDate}
+                className="flex items-center gap-2"
+                asChild
+              >
+                <span>
+                  <Calendar className="h-4 w-4" />
+                  Generate Smart Roster (Upload JSON)
+                </span>
+              </Button>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleJSONUpload}
+                className="hidden"
+              />
+            </label>
             
             {generatedRoster && (
               <Button 
