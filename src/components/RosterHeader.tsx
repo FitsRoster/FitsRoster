@@ -7,11 +7,14 @@ const RosterHeader = () => {
   const SLOT_WIDTH = 64; // w-16 = 64px
 
   return (
-    <div className="bg-white border-b border-gray-200 sticky top-0 z-10 overflow-x-auto">
-      <div className="flex min-w-max">
-        <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-gray-900">Flight Crew</h2>
-        </div>
+    <div className="bg-white border-b border-gray-200 sticky top-0 z-10 flex">
+      {/* Fixed left header section */}
+      <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 flex-shrink-0">
+        <h2 className="text-lg font-semibold text-gray-900">Flight Crew</h2>
+      </div>
+      
+      {/* Scrollable timeline section */}
+      <div className="flex-1 overflow-x-auto">
         <div 
           className="flex"
           style={{ 
